@@ -248,7 +248,7 @@ if selected == "Registrar":
             st.error("Verifique os valores e o nome do evento.")
 
 # --- ABA 2: GERENCIAR (COM DROPDOWN) ---
-elif selected == "Minhas Apostas":
+elif selected == "Apostas":
     st.subheader("🗂️ Gerenciar")
     df = carregar_apostas(usuario)
     
@@ -317,4 +317,3 @@ elif selected == "Relatórios":
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else:
         st.info("Registre apostas para ver os gráficos.")
-
