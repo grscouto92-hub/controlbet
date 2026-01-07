@@ -10,40 +10,13 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (BOTÃO GHOST / TRANSPARENTE) ---
+# --- CSS VISUAL (APENAS AJUSTES DE ESPAÇAMENTO) ---
 st.markdown("""
 <style>
-    /* Ajuste do topo */
+    /* Ajuste do topo para o menu não ficar escondido atrás da barra do Streamlit */
     .block-container {
         padding-top: 4rem;
         padding-bottom: 5rem;
-    }
-    
-    /* ESTILO DO BOTÃO: TRANSPARENTE COM BORDA VERMELHA */
-    div.stButton > button {
-        background-color: transparent !important; /* Fundo invisível */
-        color: #ff4b4b !important; /* Texto Vermelho */
-        border: 2px solid #ff4b4b !important; /* Borda Vermelha */
-        border-radius: 8px !important;
-        font-weight: bold !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    /* Garante que o texto interno também seja vermelho */
-    div.stButton > button p {
-        color: #ff4b4b !important;
-    }
-    
-    /* EFEITO HOVER (Ao passar o mouse): Fica Vermelho Sólido */
-    div.stButton > button:hover {
-        background-color: #ff4b4b !important; /* Fundo vira vermelho */
-        color: #ffffff !important; /* Texto vira branco */
-        border: 2px solid #ff4b4b !important;
-        transform: scale(1.02); /* Leve efeito de zoom */
-    }
-    
-    div.stButton > button:hover p {
-        color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -90,6 +63,7 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     if sheet:
         try:
             df = pd.DataFrame(sheet.get_all_records())
+            # Verifica duplicidade com segurança
             if not df.empty and 'Usuario' in df.columns:
                 lista_usuarios = df['Usuario'].astype(str).values
                 if str(novo_usuario) in lista_usuarios:
@@ -102,6 +76,7 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     return False, "Erro ao conectar"
 
 def carregar_apostas(usuario_ativo):
+    """Lê os dados tratando erros de cabeçalho e convertendo números"""
     sheet = conectar_google_sheets("Dados") 
     
     if sheet:
@@ -173,8 +148,8 @@ if not st.session_state['logado']:
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
-            # --- CORREÇÃO AQUI ---
-            if st.form_submit_button("Entrar", use_container_width=True):
+            # type="primary" -> Deixa o botão Vermelho (NATIVO)
+            if st.form_submit_button("Entrar", type="primary", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
                     df['Usuario'] = df['Usuario'].astype(str)
@@ -195,7 +170,8 @@ if not st.session_state['logado']:
             nu = st.text_input("Novo Usuário")
             np = st.text_input("Senha", type="password")
             
-            if st.form_submit_button("Criar Conta", use_container_width=True):
+            # type="primary" -> Deixa o botão Vermelho (NATIVO)
+            if st.form_submit_button("Criar Conta", type="primary", use_container_width=True):
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
                     if ok:
@@ -213,6 +189,7 @@ usuario = st.session_state['usuario_atual']
 
 with st.sidebar:
     st.markdown(f"**Usuário:** {usuario}")
+    # Botão Sair normal (cinza/branco)
     if st.button("Sair (Logout)"):
         st.session_state['logado'] = False
         st.rerun()
@@ -252,7 +229,8 @@ if selected == "Registrar":
 
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
-    if st.button("💾 Salvar Aposta", use_container_width=True):
+    # type="primary" -> Botão de Ação Principal (Vermelho)
+    if st.button("💾 Salvar Aposta", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
             if resultado == "Green (Venceu)": lucro = retorno - stake
@@ -302,7 +280,7 @@ elif selected == "Minhas Apostas":
             use_container_width=True
         )
 
-        if st.button("💾 Atualizar Planilha", use_container_width=True):
+        if st.button("💾 Atualizar Planilha", type="primary", use_container_width=True):
             def recalcular(row):
                 try:
                     s = float(str(row['Stake']).replace(',', '.'))
