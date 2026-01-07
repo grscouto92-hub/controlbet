@@ -193,7 +193,7 @@ with st.sidebar:
 # --- MENU HORIZONTAL ---
 selected = option_menu(
     menu_title=None,
-    options=["Registrar", "Minhas Apostas", "Relatórios"],
+    options=["Registrar", "Apostas", "Relatórios"],
     icons=["pencil-square", "list-check", "graph-up-arrow"],
     default_index=0,
     orientation="horizontal",
@@ -279,7 +279,7 @@ elif selected == "Minhas Apostas":
             use_container_width=True
         )
 
-        if st.button("💾 Atualizar Planilha", type="primary", use_container_width=True):
+        if st.button("💾 Atualizar", type="primary", use_container_width=True):
             def recalcular(row):
                 try:
                     s = float(str(row['Stake']).replace(',', '.'))
@@ -317,3 +317,4 @@ elif selected == "Relatórios":
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else:
         st.info("Registre apostas para ver os gráficos.")
+
