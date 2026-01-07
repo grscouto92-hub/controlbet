@@ -311,3 +311,82 @@ elif selected == "Apostas":
                     data_padrao = date.today()
 
                 col_e1, col_e2 = st.columns([1, 2])
+                with col_e1: nova_data = st.date_input("Data", data_padrao)
+                with col_e2: novo_evento = st.text_input("Evento", linha_atual['Time/Evento'])
+                
+                # Tenta achar o index do mercado na lista, se não achar usa o primeiro
+                try:
+                    idx_mercado = MERCADOS_FUTEBOL.index(linha_atual['Mercado'])
+                except:
+                    idx_mercado = 0
+                novo_mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL, index=idx_mercado)
+                
+                col_e3, col_e4 = st.columns(2)
+                with col_e3: novo_stake = st.number_input("Valor (Stake)", min_value=0.0, value=float(linha_atual['Stake']), step=10.0)
+                with col_e4: novo_retorno = st.number_input("Retorno Potencial", min_value=0.0, value=float(linha_atual['Retorno_Potencial']), step=10.0)
+                
+                # Resultado atual
+                opcoes_res = ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"]
+                try:
+                    idx_res = opcoes_res.index(linha_atual['Resultado'])
+                except:
+                    idx_res = 0
+                novo_resultado = st.selectbox("Resultado", opcoes_res, index=idx_res)
+
+                # Botões de Ação
+                col_b1, col_b2 = st.columns(2)
+                with col_b1:
+                    if st.button("⬅️ Voltar", use_container_width=True):
+                        st.session_state['edit_mode'] = False
+                        st.session_state['edit_index'] = None
+                        st.rerun()
+                
+                with col_b2:
+                    if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
+                        # Calcula novo lucro
+                        novo_lucro = 0.0
+                        if novo_resultado == "Green (Venceu)": novo_lucro = novo_retorno - novo_stake
+                        elif novo_resultado == "Red (Perdeu)": novo_lucro = -novo_stake
+                        
+                        # Atualiza o DataFrame na memória
+                        df.at[idx, 'Data'] = str(nova_data)
+                        df.at[idx, 'Time/Evento'] = novo_evento
+                        df.at[idx, 'Mercado'] = novo_mercado
+                        df.at[idx, 'Stake'] = novo_stake
+                        df.at[idx, 'Retorno_Potencial'] = novo_retorno
+                        df.at[idx, 'Odd'] = round(novo_retorno/novo_stake, 2) if novo_stake > 0 else 0
+                        df.at[idx, 'Resultado'] = novo_resultado
+                        df.at[idx, 'Lucro/Prejuizo'] = novo_lucro
+                        
+                        # Remove colunas auxiliares antes de salvar
+                        if 'Label' in df.columns: df = df.drop(columns=['Label'])
+                        
+                        # Salva no Google Sheets
+                        if atualizar_planilha_usuario(df, usuario):
+                            st.success("Aposta atualizada!")
+                            st.session_state['edit_mode'] = False
+                            st.session_state['edit_index'] = None
+                            time.sleep(1)
+                            st.rerun()
+
+# --- ABA 3: RELATÓRIOS ---
+elif selected == "Relatórios":
+    # Reseta o modo de edição se trocar de aba
+    st.session_state['edit_mode'] = False
+
+    st.subheader("📊 Performance")
+    df = carregar_apostas(usuario)
+    
+    if not df.empty:
+        lucro = df["Lucro/Prejuizo"].sum()
+        roi = (lucro / df["Stake"].sum()) * 100 if df["Stake"].sum() > 0 else 0
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Lucro", f"R$ {lucro:.2f}")
+        c2.metric("ROI", f"{roi:.2f}%")
+        
+        df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
+        st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
+        st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
+    else:
+        st.info("Registre apostas para ver os gráficos.")
