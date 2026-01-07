@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import date
 import plotly.express as px
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials # <--- BIBLIOTECA NOVA
 import time
 
 # --- Configuração da Página ---
@@ -18,25 +18,42 @@ MERCADOS_FUTEBOL = [
     "Escanteios (Cantos)", "Cartões", "Placar Correto (CS)", "Múltipla / Combinada", "Outro"
 ]
 
-# --- Conexão Google Sheets ---
+# --- Conexão Google Sheets (ATUALIZADA) ---
 def conectar_google_sheets(nome_aba):
-    """Conecta em uma aba específica da planilha"""
+    """Conecta em uma aba específica da planilha usando google-auth"""
     try:
-        # Pega as credenciais da nuvem (Secrets)
-        if "gcp_service_account" in st.secrets:
-            creds_dict = dict(st.secrets["gcp_service_account"])
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
-            # Tenta abrir a aba. Se não achar a planilha ou aba, retorna erro.
-            # IMPORTANTE: O nome da planilha deve ser exato.
+        # Verifica se as credenciais existem
+        if "gcp_service_account" not in st.secrets:
+            st.error("ERRO: Credenciais não encontradas. Verifique os 'Secrets' no Streamlit Cloud.")
+            return None
+
+        # Configuração das Credenciais (Padrão Novo)
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        # Carrega o JSON dos secrets
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        
+        # Cria as credenciais compatíveis com gspread v6
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        
+        # Tenta abrir a planilha e a aba
+        # IMPORTANTE: O nome deve ser IDÊNTICO ao do Google Sheets
+        try:
             sheet = client.open("Gestão Banca Apostas").worksheet(nome_aba)
             return sheet
-        else:
-            st.error("Credenciais não encontradas nos Secrets.")
+        except gspread.exceptions.SpreadsheetNotFound:
+            st.error("ERRO: Planilha 'Gestão Banca Apostas' não encontrada. Verifique o nome ou se compartilhou com o email do robô.")
             return None
+        except gspread.exceptions.WorksheetNotFound:
+            st.error(f"ERRO: Aba '{nome_aba}' não encontrada dentro da planilha.")
+            return None
+
     except Exception as e:
-        st.error(f"Erro ao conectar na aba '{nome_aba}': {e}")
+        st.error(f"Erro desconhecido ao conectar: {e}")
         return None
 
 # --- Funções de Autenticação (Login/Cadastro) ---
@@ -51,36 +68,38 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     sheet = conectar_google_sheets("Credenciais")
     if sheet:
         try:
-            df = pd.DataFrame(sheet.get_all_records())
-            # Verifica se já existe (se a tabela não estiver vazia)
-            if not df.empty and 'Usuario' in df.columns and novo_usuario in df['Usuario'].astype(str).values:
-                return False, "Usuário já existe!"
+            data = sheet.get_all_records()
+            df = pd.DataFrame(data)
+            # Verifica se já existe
+            if not df.empty and 'Usuario' in df.columns:
+                lista_usuarios = df['Usuario'].astype(str).values
+                if novo_usuario in lista_usuarios:
+                    return False, "Usuário já existe!"
             
             sheet.append_row([str(novo_usuario), str(nova_senha)])
             return True, "Conta criada com sucesso!"
         except Exception as e:
-            return False, f"Erro: {e}"
+            return False, f"Erro ao salvar: {e}"
     return False, "Erro de conexão"
 
 # --- Funções de Dados (Apostas) ---
 def carregar_apostas(usuario_ativo):
-    # Tente "Página1" (Excel pt-br) ou "Sheet1" (padrão inglês/novo sheets)
-    # Se der erro no seu, troque "Página1" por "Sheet1" aqui embaixo
+    # Se sua aba chamar Sheet1, mude aqui embaixo
     sheet = conectar_google_sheets("Página1") 
     if sheet:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         
-        # Se vazio, cria estrutura
         if df.empty: 
             return pd.DataFrame(columns=["Usuario","Data","Esporte","Time/Evento","Mercado","Odd","Stake","Retorno_Potencial","Resultado","Lucro/Prejuizo"])
         
-        # Converte números para evitar erros de cálculo
-        for col in ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']:
+        # Converte números
+        colunas_num = ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']
+        for col in colunas_num:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
         
-        # Filtra pelo usuário logado
+        # Filtra pelo usuário
         if 'Usuario' in df.columns:
             return df[df['Usuario'] == usuario_ativo]
             
@@ -89,7 +108,6 @@ def carregar_apostas(usuario_ativo):
 def salvar_aposta(nova_linha):
     sheet = conectar_google_sheets("Página1")
     if sheet:
-        # Ordem exata das colunas
         ordem = ["Usuario", "Data", "Esporte", "Time/Evento", "Mercado", "Odd", "Stake", "Retorno_Potencial", "Resultado", "Lucro/Prejuizo"]
         linha = [str(nova_linha.get(c, "")) for c in ordem]
         sheet.append_row(linha)
@@ -100,13 +118,10 @@ def atualizar_planilha_usuario(df_usuario, usuario_ativo):
     sheet = conectar_google_sheets("Página1")
     if sheet:
         todos_dados = pd.DataFrame(sheet.get_all_records())
-        # Remove as linhas antigas desse usuário da memória
         if 'Usuario' in todos_dados.columns:
             todos_dados = todos_dados[todos_dados['Usuario'] != usuario_ativo]
         
-        # Junta o que restou (outros usuários) com o novo dataframe editado (deste usuário)
         df_final = pd.concat([todos_dados, df_usuario], ignore_index=True)
-        
         sheet.clear()
         sheet.update([df_final.columns.values.tolist()] + df_final.values.tolist())
         return True
@@ -123,222 +138,136 @@ if 'logado' not in st.session_state:
 if not st.session_state['logado']:
     st.title("🔐 Gestão de Banca - Acesso")
     
-    tab1, tab2 = st.tabs(["Entrar (Login)", "Criar Nova Conta"])
+    tab1, tab2 = st.tabs(["Entrar", "Criar Conta"])
     
-    # --- LOGIN ---
     with tab1:
         with st.form("login_form"):
             user_login = st.text_input("Usuário")
             pass_login = st.text_input("Senha", type="password")
-            btn_login = st.form_submit_button("Acessar Sistema")
+            btn_login = st.form_submit_button("Entrar")
             
             if btn_login:
                 df_users = carregar_usuarios()
                 if not df_users.empty and 'Usuario' in df_users.columns:
+                    # Filtro seguro convertendo tudo para string
+                    users_str = df_users['Usuario'].astype(str)
+                    pass_str = df_users['Senha'].astype(str)
+                    
                     usuario_encontrado = df_users[
-                        (df_users['Usuario'].astype(str) == user_login) & 
-                        (df_users['Senha'].astype(str) == pass_login)
+                        (users_str == user_login) & (pass_str == pass_login)
                     ]
+                    
                     if not usuario_encontrado.empty:
                         st.session_state['logado'] = True
                         st.session_state['usuario_atual'] = user_login
-                        st.success("Login realizado!")
+                        st.success("Logado com sucesso!")
+                        time.sleep(0.5)
                         st.rerun()
                     else:
                         st.error("Usuário ou senha incorretos.")
                 else:
-                    st.error("Nenhum usuário cadastrado ou erro na planilha de Credenciais.")
+                    st.error("Erro ao ler usuários. Verifique se a aba 'Credenciais' existe e tem as colunas 'Usuario' e 'Senha'.")
 
-    # --- CRIAR CONTA ---
     with tab2:
         st.header("Cadastre-se")
         with st.form("signup_form"):
-            new_user = st.text_input("Escolha um Usuário")
-            new_pass = st.text_input("Escolha uma Senha", type="password")
-            new_pass_confirm = st.text_input("Confirme a Senha", type="password")
+            new_user = st.text_input("Novo Usuário")
+            new_pass = st.text_input("Nova Senha", type="password")
+            confirm_pass = st.text_input("Confirme a Senha", type="password")
             btn_create = st.form_submit_button("Criar Conta")
             
             if btn_create:
-                if new_pass != new_pass_confirm:
-                    st.error("As senhas não coincidem!")
+                if new_pass != confirm_pass:
+                    st.error("Senhas não conferem!")
                 elif new_user == "":
-                    st.error("O usuário não pode ser vazio.")
+                    st.error("Digite um nome de usuário.")
                 else:
                     sucesso, msg = criar_novo_usuario(new_user, new_pass)
                     if sucesso:
-                        st.success(msg + " Agora faça login na aba ao lado.")
+                        st.success("Conta criada! Vá para a aba 'Entrar'.")
                     else:
                         st.error(msg)
     
-    st.stop() # Bloqueia o resto do app até logar
+    st.stop()
 
 # =========================================================
-# ÁREA LOGADA (SÓ APARECE DEPOIS DO LOGIN)
+# ÁREA LOGADA
 # =========================================================
-
 usuario = st.session_state['usuario_atual']
 
-# Barra Lateral
-st.sidebar.markdown(f"### 👤 Olá, {usuario}")
-if st.sidebar.button("Sair (Logout)"):
+st.sidebar.markdown(f"### 👤 {usuario}")
+if st.sidebar.button("Sair"):
     st.session_state['logado'] = False
     st.rerun()
 
 st.sidebar.divider()
-pagina = st.sidebar.radio("Navegação:", ["📝 Registrar Aposta", "🗂️ Gerenciar Apostas", "📊 Relatórios"])
+pagina = st.sidebar.radio("Menu", ["📝 Registrar Aposta", "🗂️ Gerenciar Apostas", "📊 Relatórios"])
 
-# --- PÁGINA 1: REGISTRAR (COMPLETA) ---
 if pagina == "📝 Registrar Aposta":
-    st.title("📝 Registrar Nova Entrada")
-    st.markdown("Preencha os dados. A Odd é calculada automaticamente.")
-
-    # Layout de colunas igual ao original
+    st.title("📝 Registrar Entrada")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        data_aposta = st.date_input("Data do Jogo", date.today())
-        # Esporte fixo
-        st.markdown("**Esporte:** Futebol ⚽")
-    
+        data_aposta = st.date_input("Data", date.today())
+        st.markdown("**Futebol** ⚽")
     with col2:
-        evento = st.text_input("Jogo / Evento (Ex: Brasil x Argentina)")
+        evento = st.text_input("Jogo (Ex: Brasil x Argentina)")
         mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL)
-    
     with col3:
-        # Inputs fora do formulário para cálculo dinâmico
-        stake = st.number_input("Valor Investido (R$)", min_value=0.0, step=10.0, value=0.0)
-        retorno_potencial = st.number_input("Retorno Total (Se ganhar)", min_value=0.0, step=10.0, value=0.0)
-        
-        # Cálculo Imediato da Odd
-        if stake > 0 and retorno_potencial > 0:
-            odd_calculada = retorno_potencial / stake
-            st.info(f"📊 **Odd Calculada:** {odd_calculada:.2f}")
-        else:
-            odd_calculada = 0.0
-            st.warning("Preencha valor e retorno para ver a Odd.")
+        stake = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
+        retorno = st.number_input("Retorno (R$)", min_value=0.0, step=10.0)
+        if stake > 0 and retorno > 0:
+            st.info(f"Odd: {retorno/stake:.2f}")
 
-    resultado = st.selectbox("Resultado Inicial", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
+    resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
-    st.markdown("---")
-    
-    # Botão de Salvar
-    if st.button("✅ Salvar Aposta na Nuvem"):
-        # Validações
-        if stake <= 0 or retorno_potencial <= 0:
-            st.error("Erro: Valores devem ser maiores que zero.")
-        elif retorno_potencial < stake:
-            st.error("Erro: Retorno menor que o investimento.")
-        elif evento == "":
-            st.error("Erro: Digite o nome do jogo.")
-        else:
-            # Lógica de Lucro
+    if st.button("✅ Salvar"):
+        if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
-            if resultado == "Green (Venceu)":
-                lucro = retorno_potencial - stake
-            elif resultado == "Red (Perdeu)":
-                lucro = -stake
+            if resultado == "Green (Venceu)": lucro = retorno - stake
+            elif resultado == "Red (Perdeu)": lucro = -stake
             
-            nova_aposta = {
-                "Usuario": usuario, # Vincula ao usuário logado
-                "Data": str(data_aposta),
-                "Esporte": "Futebol",
-                "Time/Evento": evento,
-                "Mercado": mercado,
-                "Odd": round(odd_calculada, 2),
-                "Stake": stake,
-                "Retorno_Potencial": retorno_potencial,
-                "Resultado": resultado,
-                "Lucro/Prejuizo": lucro
+            nova = {
+                "Usuario": usuario, "Data": str(data_aposta), "Esporte": "Futebol",
+                "Time/Evento": evento, "Mercado": mercado, "Odd": round(retorno/stake, 2),
+                "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
             }
-            
-            if salvar_aposta(nova_aposta):
-                st.success("Aposta registrada com sucesso!")
-                time.sleep(1.5)
-                st.rerun() # Limpa a tela
+            if salvar_aposta(nova):
+                st.success("Registrado!")
+                time.sleep(1)
+                st.rerun()
+        else:
+            st.error("Verifique os dados.")
 
-# --- PÁGINA 2: GERENCIAR ---
 elif pagina == "🗂️ Gerenciar Apostas":
-    st.title("🗂️ Minhas Apostas")
+    st.title("🗂️ Gerenciar")
     df = carregar_apostas(usuario)
-    
     if not df.empty:
-        # Tabela Editável
-        df_editado = st.data_editor(
-            df, 
-            num_rows="dynamic",
-            column_config={
-                "Usuario": st.column_config.TextColumn("Dono", disabled=True),
-                "Lucro/Prejuizo": st.column_config.NumberColumn("Lucro", disabled=True),
-                "Odd": st.column_config.NumberColumn("Odd", disabled=True),
-                "Resultado": st.column_config.SelectboxColumn("Resultado", options=["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"]),
-                "Mercado": st.column_config.SelectboxColumn("Mercado", options=MERCADOS_FUTEBOL)
-            },
-            hide_index=True,
-            use_container_width=True
+        df_edit = st.data_editor(
+            df, num_rows="dynamic",
+            column_config={"Usuario": st.column_config.TextColumn(disabled=True)},
+            hide_index=True, use_container_width=True
         )
-
-        if st.button("💾 Salvar Edições"):
-            # Recalcula lucros antes de salvar
-            def recalcular_linha(row):
-                try:
-                    s = float(row['Stake'])
-                    r = float(row['Retorno_Potencial'])
-                    res = row['Resultado']
-                    if res == "Green (Venceu)": return r - s
-                    elif res == "Red (Perdeu)": return -s
-                    return 0.0
-                except: return 0.0
-
-            df_editado['Lucro/Prejuizo'] = df_editado.apply(recalcular_linha, axis=1)
-            
-            if atualizar_planilha_usuario(df_editado, usuario):
-                st.success("Planilha Atualizada!")
+        if st.button("💾 Salvar"):
+            df_edit['Lucro/Prejuizo'] = df_edit.apply(lambda x: x['Retorno_Potencial'] - x['Stake'] if x['Resultado'] == "Green (Venceu)" else (-x['Stake'] if x['Resultado'] == "Red (Perdeu)" else 0), axis=1)
+            if atualizar_planilha_usuario(df_edit, usuario):
+                st.success("Salvo!")
                 time.sleep(1)
                 st.rerun()
     else:
-        st.info("Você ainda não registrou nenhuma aposta.")
+        st.info("Sem apostas.")
 
-# --- PÁGINA 3: RELATÓRIOS ---
 elif pagina == "📊 Relatórios":
-    st.title(f"📊 Relatórios de Performance - {usuario}")
+    st.title("📊 Dashboard")
     df = carregar_apostas(usuario)
-    
     if not df.empty:
-        # Cálculos de Métricas
-        total_apostas = len(df)
-        lucro_liquido = df["Lucro/Prejuizo"].sum()
-        total_investido = df["Stake"].sum()
-        roi = (lucro_liquido / total_investido) * 100 if total_investido > 0 else 0
+        lucro = df["Lucro/Prejuizo"].sum()
+        roi = (lucro / df["Stake"].sum()) * 100 if df["Stake"].sum() > 0 else 0
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Lucro", f"R$ {lucro:.2f}")
+        c2.metric("ROI", f"{roi:.2f}%")
+        c3.metric("Entradas", len(df))
         
-        greens = len(df[df["Resultado"] == "Green (Venceu)"])
-        reds = len(df[df["Resultado"] == "Red (Perdeu)"])
-        finalizadas = greens + reds
-        win_rate = (greens / finalizadas) * 100 if finalizadas > 0 else 0
-
-        # Cards
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Lucro Total", f"R$ {lucro_liquido:.2f}", delta_color="normal")
-        col2.metric("ROI", f"{roi:.2f}%")
-        col3.metric("Taxa de Acerto", f"{win_rate:.1f}%")
-        col4.metric("Total Apostas", total_apostas)
-
         st.markdown("---")
-
-        # Gráfico 1: Evolução
-        df['Lucro Acumulado'] = df['Lucro/Prejuizo'].cumsum()
-        fig_evolucao = px.line(df, y='Lucro Acumulado', title="Crescimento da Banca", markers=True)
-        st.plotly_chart(fig_evolucao, use_container_width=True)
-
-        # Gráficos 2 e 3: Pizza e Barras
-        c_graf1, c_graf2 = st.columns(2)
-        with c_graf1:
-            fig_pizza = px.pie(df, names='Mercado', values='Stake', title='Distribuição por Mercado')
-            st.plotly_chart(fig_pizza, use_container_width=True)
-        
-        with c_graf2:
-            cores = {"Green (Venceu)": "green", "Red (Perdeu)": "red", "Pendente": "grey", "Reembolso": "orange"}
-            fig_bar = px.bar(df, x='Resultado', y='Stake', title='Volume por Resultado', color='Resultado', color_discrete_map=cores)
-            st.plotly_chart(fig_bar, use_container_width=True)
-            
-    else:
-        st.info("Registre algumas apostas para ver seus gráficos!")
+        df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
+        st.plotly_chart(px.line(df, y='Acumulado', title="Evolução"), use_container_width=True)
+        st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Mercados"), use_container_width=True)
