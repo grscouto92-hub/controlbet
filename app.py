@@ -10,7 +10,7 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (CORRIGIDO PARA MODO ESCURO/CLARO) ---
+# --- CSS VISUAL (BOTÃO VERMELHO) ---
 st.markdown("""
 <style>
     /* Ajuste do topo */
@@ -19,28 +19,29 @@ st.markdown("""
         padding-bottom: 5rem;
     }
     
-    /* FORÇA BRUTA NO BOTÃO - COMPATIBILIDADE TOTAL */
+    /* BOTÃO COM COR SÓLIDA (RESOLVE O PROBLEMA DE CONTRASTE) */
     div.stButton > button {
-        color: #000000 !important; /* Texto Preto */
-        background-color: #ffffff !important; /* Fundo Branco */
-        border: 1px solid #cccccc !important; /* Borda Cinza */
+        background-color: #ff4b4b !important; /* Vermelho/Laranja */
+        color: #ffffff !important; /* Texto Branco SEMPRE */
+        border: none !important;
         font-weight: bold !important;
+        border-radius: 5px !important;
     }
     
-    /* Garante que o texto interno também seja preto */
+    /* Garante que o texto interno (tag p) também seja branco */
     div.stButton > button p {
-        color: #000000 !important;
+        color: #ffffff !important;
     }
     
-    /* Efeito Hover (Passar o mouse) */
+    /* Efeito ao passar o mouse (Hover) - Fica um pouco mais escuro */
     div.stButton > button:hover {
-        border-color: #ff4b4b !important;
-        color: #ff4b4b !important;
-        background-color: #f0f2f6 !important;
+        background-color: #d93e3e !important;
+        color: #ffffff !important;
+        border: none !important;
     }
     
     div.stButton > button:hover p {
-        color: #ff4b4b !important;
+        color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -168,7 +169,6 @@ if not st.session_state['logado']:
     tab1, tab2 = st.tabs(["Entrar", "Criar Conta"])
     
     with tab1:
-        # AQUI ESTAVA O ERRO ANTES, AGORA ESTÁ CORRIGIDO:
         with st.form("login"):
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
@@ -176,7 +176,6 @@ if not st.session_state['logado']:
             if st.form_submit_button("Entrar", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
-                    # Força conversão para string para evitar erros de tipo
                     df['Usuario'] = df['Usuario'].astype(str)
                     df['Senha'] = df['Senha'].astype(str)
                     
