@@ -10,7 +10,7 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (BOTÃO TRANSPARENTE / GHOST) ---
+# --- CSS VISUAL (BOTÃO GHOST / TRANSPARENTE) ---
 st.markdown("""
 <style>
     /* Ajuste do topo */
@@ -21,7 +21,7 @@ st.markdown("""
     
     /* ESTILO DO BOTÃO: TRANSPARENTE COM BORDA VERMELHA */
     div.stButton > button {
-        background-color: transparent !important; /* Fundo invisível (pega a cor do site) */
+        background-color: transparent !important; /* Fundo invisível */
         color: #ff4b4b !important; /* Texto Vermelho */
         border: 2px solid #ff4b4b !important; /* Borda Vermelha */
         border-radius: 8px !important;
@@ -102,7 +102,6 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     return False, "Erro ao conectar"
 
 def carregar_apostas(usuario_ativo):
-    """Lê os dados tratando erros de cabeçalho e convertendo números"""
     sheet = conectar_google_sheets("Dados") 
     
     if sheet:
@@ -174,7 +173,7 @@ if not st.session_state['logado']:
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
-            # use_container_width faz o botão ocupar a largura toda (fica bonito no celular)
+            # --- CORREÇÃO AQUI ---
             if st.form_submit_button("Entrar", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
