@@ -43,10 +43,10 @@ def conectar_google_sheets(nome_aba):
         # Tenta abrir a planilha e a aba
         # IMPORTANTE: O nome deve ser IDÊNTICO ao do Google Sheets
         try:
-            sheet = client.open("Gestão Banca Apostas").worksheet(nome_aba)
+            sheet = client.open("ControlBET").worksheet(nome_aba)
             return sheet
         except gspread.exceptions.SpreadsheetNotFound:
-            st.error("ERRO: Planilha 'Gestão Banca Apostas' não encontrada. Verifique o nome ou se compartilhou com o email do robô.")
+            st.error("ERRO: Planilha 'ControlBET' não encontrada. Verifique o nome ou se compartilhou com o email do robô.")
             return None
         except gspread.exceptions.WorksheetNotFound:
             st.error(f"ERRO: Aba '{nome_aba}' não encontrada dentro da planilha.")
@@ -85,7 +85,7 @@ def criar_novo_usuario(novo_usuario, nova_senha):
 # --- Funções de Dados (Apostas) ---
 def carregar_apostas(usuario_ativo):
     # Se sua aba chamar Sheet1, mude aqui embaixo
-    sheet = conectar_google_sheets("Página1") 
+    sheet = conectar_google_sheets("Dados") 
     if sheet:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
@@ -106,7 +106,7 @@ def carregar_apostas(usuario_ativo):
     return pd.DataFrame()
 
 def salvar_aposta(nova_linha):
-    sheet = conectar_google_sheets("Página1")
+    sheet = conectar_google_sheets("Dados")
     if sheet:
         ordem = ["Usuario", "Data", "Esporte", "Time/Evento", "Mercado", "Odd", "Stake", "Retorno_Potencial", "Resultado", "Lucro/Prejuizo"]
         linha = [str(nova_linha.get(c, "")) for c in ordem]
@@ -115,7 +115,7 @@ def salvar_aposta(nova_linha):
     return False
 
 def atualizar_planilha_usuario(df_usuario, usuario_ativo):
-    sheet = conectar_google_sheets("Página1")
+    sheet = conectar_google_sheets("Dados")
     if sheet:
         todos_dados = pd.DataFrame(sheet.get_all_records())
         if 'Usuario' in todos_dados.columns:
@@ -271,3 +271,4 @@ elif pagina == "📊 Relatórios":
         df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Mercados"), use_container_width=True)
+
