@@ -10,16 +10,29 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS PERSONALIZADO (Ajuste visual mobile) ---
+# --- CSS PERSONALIZADO (Correção de Botões e Layout) ---
 st.markdown("""
 <style>
-    /* Aumentei o padding-top para 4rem para o menu não ficar escondido */
+    /* Ajuste do topo para o menu não ficar escondido */
     .block-container {
         padding-top: 4rem;
         padding-bottom: 5rem;
     }
-    /* Ajuste fino para remover espaço extra do título padrão se houver */
-    header {visibility: visible;}
+    
+    /* CORREÇÃO DOS BOTÕES (Fundo Branco, Texto Preto) */
+    div.stButton > button {
+        color: #262730 !important; /* Texto Preto/Cinza Escuro */
+        background-color: #ffffff !important; /* Fundo Branco */
+        border: 1px solid #d0d0d0 !important; /* Borda Cinza */
+        font-weight: 500 !important;
+    }
+    
+    /* Efeito ao passar o mouse (Hover) */
+    div.stButton > button:hover {
+        border-color: #ff4b4b !important; /* Borda Vermelha */
+        color: #ff4b4b !important; /* Texto Vermelho */
+        background-color: #f0f2f6 !important; /* Fundo levemente cinza */
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -149,7 +162,8 @@ if not st.session_state['logado']:
         with st.form("login"):
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
+            # Botão agora terá texto preto e fundo branco
+            if st.form_submit_button("Entrar", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
                     df['Usuario'] = df['Usuario'].astype(str)
@@ -167,7 +181,7 @@ if not st.session_state['logado']:
         with st.form("new"):
             nu = st.text_input("Novo Usuário")
             np = st.text_input("Senha", type="password")
-            if st.form_submit_button("Criar"):
+            if st.form_submit_button("Criar Conta", use_container_width=True):
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
                     if ok: st.success(msg)
@@ -222,6 +236,7 @@ if selected == "Registrar":
 
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
+    # Botão com visual corrigido
     if st.button("💾 Salvar Aposta", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
