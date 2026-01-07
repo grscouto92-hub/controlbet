@@ -10,13 +10,18 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (AJUSTE DE TOPO) ---
+# --- CSS VISUAL (AJUSTE DE TOPO E CARTÕES) ---
 st.markdown("""
 <style>
-    /* Empurra o conteúdo para baixo para não ficar atrás do menu */
+    /* Empurra o conteúdo para baixo */
     .block-container {
         padding-top: 4rem;
         padding-bottom: 5rem;
+    }
+    /* Estilo para deixar os cartões mais bonitos */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 10px;
+        margin-bottom: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -75,13 +80,10 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     return False, "Erro ao conectar"
 
 def carregar_apostas(usuario_ativo):
-    """Lê os dados tratando erros de cabeçalho e convertendo números"""
     sheet = conectar_google_sheets("Dados") 
-    
     if sheet:
         try:
             dados_brutos = sheet.get_all_values()
-            
             if not dados_brutos:
                 cols = ["Usuario","Data","Esporte","Time/Evento","Mercado","Odd","Stake","Retorno_Potencial","Resultado","Lucro/Prejuizo"]
                 return pd.DataFrame(columns=cols)
@@ -99,19 +101,18 @@ def carregar_apostas(usuario_ativo):
                     df[col] = df[col].astype(str).str.replace(',', '.')
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
-            # Filtra pelo usuário
             df_user = df[df['Usuario'] == usuario_ativo].copy()
-            
-            # Cria um índice original para sabermos qual linha atualizar depois
-            # (Isso ajuda a identificar a aposta dentro da lista filtrada)
-            df_user['Index_Original'] = df_user.index
+            # Ordena da mais recente para a mais antiga (opcional, mas bom para feed)
+            # Se der erro na ordenação, ele segue sem ordenar
+            try:
+                df_user = df_user.sort_index(ascending=False)
+            except: pass
             
             return df_user
                 
         except Exception as e:
             st.error(f"Erro ao processar planilha: {e}")
             return pd.DataFrame()
-            
     return pd.DataFrame()
 
 def salvar_aposta(nova_linha):
@@ -127,76 +128,56 @@ def atualizar_planilha_usuario(df_usuario, usuario_ativo):
     sheet = conectar_google_sheets("Dados")
     if sheet:
         todos_dados = pd.DataFrame(sheet.get_all_records())
-        
-        # Remove as linhas antigas desse usuário
         if 'Usuario' in todos_dados.columns:
             todos_dados = todos_dados[todos_dados['Usuario'] != usuario_ativo]
         
-        # Remove a coluna auxiliar se existir antes de salvar
-        if 'Index_Original' in df_usuario.columns:
-            df_usuario = df_usuario.drop(columns=['Index_Original'])
-            
-        # Junta os dados de outros usuários com os dados atualizados deste usuário
         df_final = pd.concat([todos_dados, df_usuario], ignore_index=True)
-        
         sheet.clear()
         sheet.update([df_final.columns.values.tolist()] + df_final.values.tolist())
         return True
     return False
 
-# --- Inicialização de Sessão ---
+# --- Sessão ---
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
     st.session_state['usuario_atual'] = ""
     
-# Controle de Edição
 if 'edit_mode' not in st.session_state:
     st.session_state['edit_mode'] = False
     st.session_state['edit_index'] = None
 
 # =========================================================
-# TELA DE LOGIN / CADASTRO
+# LOGIN
 # =========================================================
 if not st.session_state['logado']:
     st.title("⚽ ControlBET")
-    
     tab1, tab2 = st.tabs(["Entrar", "Criar Conta"])
-    
     with tab1:
         with st.form("login"):
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
-            
             if st.form_submit_button("Entrar", type="primary", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
                     df['Usuario'] = df['Usuario'].astype(str)
                     df['Senha'] = df['Senha'].astype(str)
-                    
                     match = df[(df['Usuario']==u) & (df['Senha']==p)]
                     if not match.empty:
                         st.session_state['logado'] = True
                         st.session_state['usuario_atual'] = u
                         st.rerun()
-                    else:
-                        st.error("Usuário ou senha incorretos")
-                else:
-                    st.error("Erro no cadastro ou planilha vazia")
-    
+                    else: st.error("Usuário ou senha incorretos")
+                else: st.error("Erro no cadastro")
     with tab2:
         with st.form("new"):
             nu = st.text_input("Novo Usuário")
             np = st.text_input("Senha", type="password")
-            
             if st.form_submit_button("Criar Conta", type="primary", use_container_width=True):
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
-                    if ok:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
-                else:
-                    st.error("Preencha todos os campos")
+                    if ok: st.success(msg)
+                    else: st.error(msg)
+                else: st.error("Preencha todos os campos")
     st.stop()
 
 # =========================================================
@@ -210,7 +191,7 @@ with st.sidebar:
         st.session_state['logado'] = False
         st.rerun()
 
-# --- MENU HORIZONTAL ---
+# --- MENU ---
 selected = option_menu(
     menu_title=None,
     options=["Registrar", "Apostas", "Relatórios"],
@@ -225,130 +206,136 @@ selected = option_menu(
     }
 )
 
-# --- ABA 1: REGISTRAR ---
+# --- REGISTRAR ---
 if selected == "Registrar":
-    # Reseta o modo de edição se trocar de aba
     st.session_state['edit_mode'] = False
-    
     st.subheader("📝 Registrar Entrada")
-    
     c1, c2 = st.columns([1, 2])
     with c1: data_aposta = st.date_input("Data", date.today())
     with c2: evento = st.text_input("Evento (Ex: Fla x Flu)")
-    
     mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL)
-    
     c3, c4, c5 = st.columns(3)
     with c3: stake = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
     with c4: retorno = st.number_input("Retorno (R$)", min_value=0.0, step=10.0)
     with c5:
-        if stake > 0 and retorno > 0:
-            st.metric("Odd", f"{retorno/stake:.2f}")
-        else:
-            st.write("Odd: 0.00")
-
+        if stake > 0 and retorno > 0: st.metric("Odd", f"{retorno/stake:.2f}")
+        else: st.write("Odd: 0.00")
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
-    
     if st.button("💾 Salvar Aposta", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
             if resultado == "Green (Venceu)": lucro = retorno - stake
             elif resultado == "Red (Perdeu)": lucro = -stake
-            
             nova = {
                 "Usuario": usuario, "Data": str(data_aposta), "Esporte": "Futebol",
                 "Time/Evento": evento, "Mercado": mercado, "Odd": round(retorno/stake, 2),
                 "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
             }
             if salvar_aposta(nova):
-                st.success("Salvo com sucesso!")
+                st.success("Salvo!")
                 time.sleep(1)
                 st.rerun()
-        else:
-            st.error("Verifique os valores e o nome do evento.")
+        else: st.error("Verifique os valores.")
 
-# --- ABA 2: APOSTAS (LISTA E EDIÇÃO) ---
+# --- APOSTAS (LISTA VISUAL) ---
 elif selected == "Apostas":
-    st.subheader("🗂️ Gerenciar Apostas")
+    st.subheader("🗂️ Minhas Apostas")
     df = carregar_apostas(usuario)
     
     if df.empty:
         st.info("Nenhuma aposta encontrada.")
     else:
-        # Se NÃO estiver editando, mostra a lista para escolher
+        # === MODO LISTA VISUAL (FEED) ===
         if not st.session_state['edit_mode']:
-            # Cria uma coluna bonita para o Selectbox
-            df['Label'] = df['Data'].astype(str) + " | " + df['Time/Evento'] + " | " + df['Resultado']
+            st.caption("Clique no botão 'Editar' para alterar.")
             
-            # Selectbox para escolher qual editar
-            escolha = st.selectbox("🔍 Selecione a aposta para editar:", df['Label'].tolist(), index=None, placeholder="Clique aqui para buscar...")
-            
-            if escolha:
-                # Pega o índice real da aposta escolhida
-                index_selecionado = df[df['Label'] == escolha].index[0]
-                st.session_state['edit_mode'] = True
-                st.session_state['edit_index'] = index_selecionado
-                st.rerun()
-            
-            st.divider()
-            st.caption("Visão Geral:")
-            # Mostra a tabela apenas para visualização rápida
-            st.dataframe(df.drop(columns=['Label', 'Index_Original'], errors='ignore'), hide_index=True, use_container_width=True)
+            # Loop para criar os cartões
+            for index, row in df.iterrows():
+                # Define cor da borda/status visual
+                res = row['Resultado']
+                cor_status = "gray"
+                icone = "⏳"
+                if "Green" in res: 
+                    cor_status = "green"
+                    icone = "✅"
+                elif "Red" in res: 
+                    cor_status = "red"
+                    icone = "❌"
+                elif "Reembolso" in res:
+                    cor_status = "orange"
+                    icone = "🔄"
 
-        # Se ESTIVER editando, mostra o formulário (parecido com o registrar)
+                # Cria o Cartão (Container)
+                with st.container(border=True):
+                    col_info, col_btn = st.columns([4, 1])
+                    
+                    with col_info:
+                        st.markdown(f"**{row['Time/Evento']}**")
+                        st.caption(f"{row['Data']} | {row['Mercado']}")
+                        
+                        # Mostra Lucro/Prejuízo colorido
+                        if "Green" in res:
+                            st.markdown(f":green[**Lucro: R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
+                        elif "Red" in res:
+                            st.markdown(f":red[**Prejuízo: R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
+                        else:
+                            st.markdown(f"**Status:** {res} {icone}")
+
+                    with col_btn:
+                        # Botão de editar alinhado verticalmente
+                        st.write("") # Espaço vazio para alinhar
+                        if st.button("✏️", key=f"btn_edit_{index}"):
+                            st.session_state['edit_mode'] = True
+                            st.session_state['edit_index'] = index
+                            st.rerun()
+
+        # === MODO EDIÇÃO (FORMULÁRIO) ===
         else:
             idx = st.session_state['edit_index']
+            # Garante que o índice existe (caso atualização de planilha tenha mudado algo)
+            if idx not in df.index:
+                st.error("Erro ao localizar a aposta. Tente recarregar.")
+                st.session_state['edit_mode'] = False
+                st.rerun()
+
             linha_atual = df.loc[idx]
             
-            st.markdown(f"**Editando:** {linha_atual['Time/Evento']}")
+            st.markdown(f"### ✏️ Editando: {linha_atual['Time/Evento']}")
             
-            # Formulário de Edição
             with st.container(border=True):
-                # Tenta converter a data string para objeto data
-                try:
-                    data_padrao = datetime.strptime(linha_atual['Data'], '%Y-%m-%d').date()
-                except:
-                    data_padrao = date.today()
+                try: data_padrao = datetime.strptime(linha_atual['Data'], '%Y-%m-%d').date()
+                except: data_padrao = date.today()
 
                 col_e1, col_e2 = st.columns([1, 2])
                 with col_e1: nova_data = st.date_input("Data", data_padrao)
                 with col_e2: novo_evento = st.text_input("Evento", linha_atual['Time/Evento'])
                 
-                # Tenta achar o index do mercado na lista, se não achar usa o primeiro
-                try:
-                    idx_mercado = MERCADOS_FUTEBOL.index(linha_atual['Mercado'])
-                except:
-                    idx_mercado = 0
+                try: idx_mercado = MERCADOS_FUTEBOL.index(linha_atual['Mercado'])
+                except: idx_mercado = 0
                 novo_mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL, index=idx_mercado)
                 
                 col_e3, col_e4 = st.columns(2)
-                with col_e3: novo_stake = st.number_input("Valor (Stake)", min_value=0.0, value=float(linha_atual['Stake']), step=10.0)
-                with col_e4: novo_retorno = st.number_input("Retorno Potencial", min_value=0.0, value=float(linha_atual['Retorno_Potencial']), step=10.0)
+                with col_e3: novo_stake = st.number_input("Stake", min_value=0.0, value=float(linha_atual['Stake']), step=10.0)
+                with col_e4: novo_retorno = st.number_input("Retorno", min_value=0.0, value=float(linha_atual['Retorno_Potencial']), step=10.0)
                 
-                # Resultado atual
                 opcoes_res = ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"]
-                try:
-                    idx_res = opcoes_res.index(linha_atual['Resultado'])
-                except:
-                    idx_res = 0
+                try: idx_res = opcoes_res.index(linha_atual['Resultado'])
+                except: idx_res = 0
                 novo_resultado = st.selectbox("Resultado", opcoes_res, index=idx_res)
 
-                # Botões de Ação
-                col_b1, col_b2 = st.columns(2)
-                with col_b1:
+                c_b1, c_b2 = st.columns(2)
+                with c_b1:
                     if st.button("⬅️ Voltar", use_container_width=True):
                         st.session_state['edit_mode'] = False
                         st.session_state['edit_index'] = None
                         st.rerun()
                 
-                with col_b2:
+                with c_b2:
                     if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
-                        # Calcula novo lucro
                         novo_lucro = 0.0
                         if novo_resultado == "Green (Venceu)": novo_lucro = novo_retorno - novo_stake
                         elif novo_resultado == "Red (Perdeu)": novo_lucro = -novo_stake
                         
-                        # Atualiza o DataFrame na memória
                         df.at[idx, 'Data'] = str(nova_data)
                         df.at[idx, 'Time/Evento'] = novo_evento
                         df.at[idx, 'Mercado'] = novo_mercado
@@ -358,35 +345,25 @@ elif selected == "Apostas":
                         df.at[idx, 'Resultado'] = novo_resultado
                         df.at[idx, 'Lucro/Prejuizo'] = novo_lucro
                         
-                        # Remove colunas auxiliares antes de salvar
-                        if 'Label' in df.columns: df = df.drop(columns=['Label'])
-                        
-                        # Salva no Google Sheets
                         if atualizar_planilha_usuario(df, usuario):
-                            st.success("Aposta atualizada!")
+                            st.success("Atualizado!")
                             st.session_state['edit_mode'] = False
                             st.session_state['edit_index'] = None
                             time.sleep(1)
                             st.rerun()
 
-# --- ABA 3: RELATÓRIOS ---
+# --- RELATÓRIOS ---
 elif selected == "Relatórios":
-    # Reseta o modo de edição se trocar de aba
     st.session_state['edit_mode'] = False
-
     st.subheader("📊 Performance")
     df = carregar_apostas(usuario)
-    
     if not df.empty:
         lucro = df["Lucro/Prejuizo"].sum()
         roi = (lucro / df["Stake"].sum()) * 100 if df["Stake"].sum() > 0 else 0
-        
         c1, c2 = st.columns(2)
         c1.metric("Lucro", f"R$ {lucro:.2f}")
         c2.metric("ROI", f"{roi:.2f}%")
-        
         df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
-    else:
-        st.info("Registre apostas para ver os gráficos.")
+    else: st.info("Sem dados para gráficos.")
