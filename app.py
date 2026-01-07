@@ -175,4 +175,169 @@ if not st.session_state['logado']:
             p = st.text_input("Senha", type="password")
             
             # use_container_width faz o botão ocupar a largura toda (fica bonito no celular)
-            if st.
+            if st.form_submit_button("Entrar", use_container_width=True):
+                df = carregar_usuarios()
+                if not df.empty and 'Usuario' in df.columns:
+                    df['Usuario'] = df['Usuario'].astype(str)
+                    df['Senha'] = df['Senha'].astype(str)
+                    
+                    match = df[(df['Usuario']==u) & (df['Senha']==p)]
+                    if not match.empty:
+                        st.session_state['logado'] = True
+                        st.session_state['usuario_atual'] = u
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos")
+                else:
+                    st.error("Erro no cadastro ou planilha vazia")
+    
+    with tab2:
+        with st.form("new"):
+            nu = st.text_input("Novo Usuário")
+            np = st.text_input("Senha", type="password")
+            
+            if st.form_submit_button("Criar Conta", use_container_width=True):
+                if nu and np:
+                    ok, msg = criar_novo_usuario(nu, np)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                else:
+                    st.error("Preencha todos os campos")
+    st.stop()
+
+# =========================================================
+# ÁREA LOGADA
+# =========================================================
+usuario = st.session_state['usuario_atual']
+
+with st.sidebar:
+    st.markdown(f"**Usuário:** {usuario}")
+    if st.button("Sair (Logout)"):
+        st.session_state['logado'] = False
+        st.rerun()
+
+# MENU HORIZONTAL
+selected = option_menu(
+    menu_title=None,
+    options=["Registrar", "Minhas Apostas", "Relatórios"],
+    icons=["pencil-square", "list-check", "graph-up-arrow"],
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "0!important", "background-color": "#f8f9fa"},
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px", "--hover-color": "#eee"},
+        "nav-link-selected": {"background-color": "#ff4b4b"},
+    }
+)
+
+# --- ABA 1: REGISTRAR ---
+if selected == "Registrar":
+    st.subheader("📝 Registrar Entrada")
+    
+    c1, c2 = st.columns([1, 2])
+    with c1: data_aposta = st.date_input("Data", date.today())
+    with c2: evento = st.text_input("Evento (Ex: Fla x Flu)")
+    
+    mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL)
+    
+    c3, c4, c5 = st.columns(3)
+    with c3: stake = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
+    with c4: retorno = st.number_input("Retorno (R$)", min_value=0.0, step=10.0)
+    with c5:
+        if stake > 0 and retorno > 0:
+            st.metric("Odd", f"{retorno/stake:.2f}")
+        else:
+            st.write("Odd: 0.00")
+
+    resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
+    
+    if st.button("💾 Salvar Aposta", use_container_width=True):
+        if stake > 0 and retorno >= stake and evento:
+            lucro = 0.0
+            if resultado == "Green (Venceu)": lucro = retorno - stake
+            elif resultado == "Red (Perdeu)": lucro = -stake
+            
+            nova = {
+                "Usuario": usuario, "Data": str(data_aposta), "Esporte": "Futebol",
+                "Time/Evento": evento, "Mercado": mercado, "Odd": round(retorno/stake, 2),
+                "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
+            }
+            if salvar_aposta(nova):
+                st.success("Salvo com sucesso!")
+                time.sleep(1)
+                st.rerun()
+        else:
+            st.error("Verifique os valores e o nome do evento.")
+
+# --- ABA 2: GERENCIAR (COM DROPDOWN) ---
+elif selected == "Minhas Apostas":
+    st.subheader("🗂️ Gerenciar")
+    df = carregar_apostas(usuario)
+    
+    if not df.empty:
+        df_edit = st.data_editor(
+            df,
+            num_rows="dynamic",
+            column_config={
+                "Usuario": st.column_config.TextColumn(disabled=True),
+                "Time/Evento": st.column_config.TextColumn("Evento", width="medium"),
+                "Resultado": st.column_config.SelectboxColumn(
+                    "Resultado",
+                    width="small",
+                    options=["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"],
+                    required=True
+                ),
+                "Mercado": st.column_config.SelectboxColumn(
+                    "Mercado",
+                    width="medium",
+                    options=MERCADOS_FUTEBOL,
+                    required=True
+                ),
+                "Stake": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+                "Lucro/Prejuizo": st.column_config.NumberColumn("Lucro", format="R$ %.2f", disabled=True),
+                "Odd": st.column_config.NumberColumn("Odd", format="%.2f", disabled=True),
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+
+        if st.button("💾 Atualizar Planilha", use_container_width=True):
+            def recalcular(row):
+                try:
+                    s = float(str(row['Stake']).replace(',', '.'))
+                    r = float(str(row['Retorno_Potencial']).replace(',', '.'))
+                    res = row['Resultado']
+                    if res == "Green (Venceu)": return r - s
+                    elif res == "Red (Perdeu)": return -s
+                    return 0.0
+                except: return 0.0
+
+            df_edit['Lucro/Prejuizo'] = df_edit.apply(recalcular, axis=1)
+            
+            if atualizar_planilha_usuario(df_edit, usuario):
+                st.success("Planilha Atualizada!")
+                time.sleep(1)
+                st.rerun()
+    else:
+        st.info("Nenhuma aposta encontrada.")
+
+# --- ABA 3: RELATÓRIOS ---
+elif selected == "Relatórios":
+    st.subheader("📊 Performance")
+    df = carregar_apostas(usuario)
+    
+    if not df.empty:
+        lucro = df["Lucro/Prejuizo"].sum()
+        roi = (lucro / df["Stake"].sum()) * 100 if df["Stake"].sum() > 0 else 0
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Lucro", f"R$ {lucro:.2f}")
+        c2.metric("ROI", f"{roi:.2f}%")
+        
+        df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
+        st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
+        st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
+    else:
+        st.info("Registre apostas para ver os gráficos.")
