@@ -10,10 +10,10 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (APENAS AJUSTES DE ESPAÇAMENTO) ---
+# --- CSS VISUAL (AJUSTE DE TOPO) ---
 st.markdown("""
 <style>
-    /* Ajuste do topo para o menu não ficar escondido atrás da barra do Streamlit */
+    /* Empurra o conteúdo para baixo para não ficar atrás do menu */
     .block-container {
         padding-top: 4rem;
         padding-bottom: 5rem;
@@ -63,7 +63,6 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     if sheet:
         try:
             df = pd.DataFrame(sheet.get_all_records())
-            # Verifica duplicidade com segurança
             if not df.empty and 'Usuario' in df.columns:
                 lista_usuarios = df['Usuario'].astype(str).values
                 if str(novo_usuario) in lista_usuarios:
@@ -148,7 +147,7 @@ if not st.session_state['logado']:
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
-            # type="primary" -> Deixa o botão Vermelho (NATIVO)
+            # Botão Nativo Vermelho (Primary)
             if st.form_submit_button("Entrar", type="primary", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
@@ -170,7 +169,7 @@ if not st.session_state['logado']:
             nu = st.text_input("Novo Usuário")
             np = st.text_input("Senha", type="password")
             
-            # type="primary" -> Deixa o botão Vermelho (NATIVO)
+            # Botão Nativo Vermelho (Primary)
             if st.form_submit_button("Criar Conta", type="primary", use_container_width=True):
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
@@ -189,12 +188,11 @@ usuario = st.session_state['usuario_atual']
 
 with st.sidebar:
     st.markdown(f"**Usuário:** {usuario}")
-    # Botão Sair normal (cinza/branco)
     if st.button("Sair (Logout)"):
         st.session_state['logado'] = False
         st.rerun()
 
-# MENU HORIZONTAL
+# --- MENU HORIZONTAL (CONFIGURADO PARA MATCHING DE CORES) ---
 selected = option_menu(
     menu_title=None,
     options=["Registrar", "Minhas Apostas", "Relatórios"],
@@ -202,8 +200,16 @@ selected = option_menu(
     default_index=0,
     orientation="horizontal",
     styles={
-        "container": {"padding": "0!important", "background-color": "#f8f9fa"},
-        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px", "--hover-color": "#eee"},
+        # Container transparente para não conflitar com modo escuro/claro
+        "container": {"padding": "0!important", "background-color": "transparent"},
+        
+        # Ícones vermelhos para combinar com os botões
+        "icon": {"color": "#ff4b4b", "font-size": "18px"}, 
+        
+        # Texto normal (se adapta ao tema)
+        "nav-link": {"font-size": "15px", "text-align": "center", "margin":"5px", "--hover-color": "#eee"},
+        
+        # Item Selecionado: Fundo Vermelho e Texto Branco
         "nav-link-selected": {"background-color": "#ff4b4b"},
     }
 )
@@ -229,7 +235,7 @@ if selected == "Registrar":
 
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
-    # type="primary" -> Botão de Ação Principal (Vermelho)
+    # Botão Nativo Vermelho (Primary)
     if st.button("💾 Salvar Aposta", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
@@ -280,6 +286,7 @@ elif selected == "Minhas Apostas":
             use_container_width=True
         )
 
+        # Botão Nativo Vermelho (Primary)
         if st.button("💾 Atualizar Planilha", type="primary", use_container_width=True):
             def recalcular(row):
                 try:
