@@ -147,7 +147,6 @@ if not st.session_state['logado']:
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
-            # Botão Nativo Vermelho (Primary)
             if st.form_submit_button("Entrar", type="primary", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
@@ -169,7 +168,6 @@ if not st.session_state['logado']:
             nu = st.text_input("Novo Usuário")
             np = st.text_input("Senha", type="password")
             
-            # Botão Nativo Vermelho (Primary)
             if st.form_submit_button("Criar Conta", type="primary", use_container_width=True):
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
@@ -192,7 +190,7 @@ with st.sidebar:
         st.session_state['logado'] = False
         st.rerun()
 
-# --- MENU HORIZONTAL (CONFIGURADO PARA MATCHING DE CORES) ---
+# --- MENU HORIZONTAL ---
 selected = option_menu(
     menu_title=None,
     options=["Registrar", "Minhas Apostas", "Relatórios"],
@@ -200,16 +198,12 @@ selected = option_menu(
     default_index=0,
     orientation="horizontal",
     styles={
-        # Container transparente para não conflitar com modo escuro/claro
         "container": {"padding": "0!important", "background-color": "transparent"},
-        
-        # Ícones vermelhos para combinar com os botões
         "icon": {"color": "#ff4b4b", "font-size": "18px"}, 
         
-        # Texto normal (se adapta ao tema)
-        "nav-link": {"font-size": "15px", "text-align": "center", "margin":"5px", "--hover-color": "#eee"},
+        # Mudei --hover-color para #cccccc (Cinza Visível)
+        "nav-link": {"font-size": "15px", "text-align": "center", "margin":"5px", "--hover-color": "#cccccc"},
         
-        # Item Selecionado: Fundo Vermelho e Texto Branco
         "nav-link-selected": {"background-color": "#ff4b4b"},
     }
 )
@@ -235,7 +229,6 @@ if selected == "Registrar":
 
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
-    # Botão Nativo Vermelho (Primary)
     if st.button("💾 Salvar Aposta", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
@@ -286,7 +279,6 @@ elif selected == "Minhas Apostas":
             use_container_width=True
         )
 
-        # Botão Nativo Vermelho (Primary)
         if st.button("💾 Atualizar Planilha", type="primary", use_container_width=True):
             def recalcular(row):
                 try:
