@@ -10,7 +10,7 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (CORRIGIDO PARA MODO ESCURO) ---
+# --- CSS VISUAL (MODO ESCURO/CLARO CORRIGIDO) ---
 st.markdown("""
 <style>
     /* Ajuste do topo */
@@ -19,28 +19,26 @@ st.markdown("""
         padding-bottom: 5rem;
     }
     
-    /* FORÇA BRUTA NO BOTÃO */
-    /* Garante que o texto seja PRETO mesmo em Dark Mode */
+    /* FORÇA BRUTA NO BOTÃO - COMPATIBILIDADE TOTAL */
     div.stButton > button {
-        color: #000000 !important; /* Texto Preto Puro */
+        color: #000000 !important; /* Texto Preto */
         background-color: #ffffff !important; /* Fundo Branco */
         border: 1px solid #cccccc !important; /* Borda Cinza */
         font-weight: bold !important;
     }
     
-    /* Garante que o texto interno (parágrafo) também seja preto */
+    /* Garante que o texto interno também seja preto */
     div.stButton > button p {
         color: #000000 !important;
     }
     
-    /* Efeito ao passar o mouse (Hover) */
+    /* Efeito Hover (Passar o mouse) */
     div.stButton > button:hover {
         border-color: #ff4b4b !important;
         color: #ff4b4b !important;
         background-color: #f0f2f6 !important;
     }
     
-    /* Efeito ao passar o mouse no texto interno */
     div.stButton > button:hover p {
         color: #ff4b4b !important;
     }
@@ -89,9 +87,12 @@ def criar_novo_usuario(novo_usuario, nova_senha):
     if sheet:
         try:
             df = pd.DataFrame(sheet.get_all_records())
+            # Verifica duplicidade com segurança
             if not df.empty and 'Usuario' in df.columns:
-                if novo_usuario in df['Usuario'].astype(str).values:
+                lista_usuarios = df['Usuario'].astype(str).values
+                if str(novo_usuario) in lista_usuarios:
                     return False, "Usuário já existe!"
+            
             sheet.append_row([str(novo_usuario), str(nova_senha)])
             return True, "Conta criada com sucesso!"
         except Exception as e:
@@ -170,6 +171,7 @@ if not st.session_state['logado']:
         with st.form("login"):
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
+            
             if st.form_submit_button("Entrar", use_container_width=True):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
@@ -181,12 +183,10 @@ if not st.session_state['logado']:
                         st.session_state['logado'] = True
                         st.session_state['usuario_atual'] = u
                         st.rerun()
-                    else: st.error("Usuário ou senha incorretos")
-                else: st.error("Erro no cadastro ou planilha vazia")
+                    else:
+                        st.error("Usuário ou senha incorretos")
+                else:
+                    st.error("Erro no cadastro ou planilha vazia")
     
     with tab2:
-        with st.form("new"):
-            nu = st.text_input("Novo Usuário")
-            np = st.text_input("Senha", type="password")
-            if st.form_submit_button("Criar Conta", use_container_width=True):
-                if
+        with st
