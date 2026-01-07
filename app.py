@@ -8,15 +8,18 @@ import time
 from streamlit_option_menu import option_menu
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="Gestão de Banca Pro", layout="wide", page_icon="⚽")
+st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
 # --- CSS PERSONALIZADO (Ajuste visual mobile) ---
 st.markdown("""
 <style>
+    /* Aumentei o padding-top para 4rem para o menu não ficar escondido */
     .block-container {
-        padding-top: 1rem;
+        padding-top: 4rem;
         padding-bottom: 5rem;
     }
+    /* Ajuste fino para remover espaço extra do título padrão se houver */
+    header {visibility: visible;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -44,7 +47,6 @@ def conectar_google_sheets(nome_aba):
         try:
             return client.open("ControlBET").worksheet(nome_aba)
         except Exception as e:
-            # st.error(f"Erro ao abrir aba {nome_aba}: {e}") # Descomente para debugar se precisar
             return None
     except Exception as e:
         st.error(f"Erro de conexão geral: {e}")
@@ -74,7 +76,7 @@ def criar_novo_usuario(novo_usuario, nova_senha):
 
 def carregar_apostas(usuario_ativo):
     """Lê os dados tratando erros de cabeçalho e convertendo números"""
-    sheet = conectar_google_sheets("Dados") # Se der erro, tente "Sheet1"
+    sheet = conectar_google_sheets("Dados") 
     
     if sheet:
         try:
@@ -120,17 +122,11 @@ def salvar_aposta(nova_linha):
 def atualizar_planilha_usuario(df_usuario, usuario_ativo):
     sheet = conectar_google_sheets("Dados")
     if sheet:
-        # Pega TUDO, remove as linhas do usuário atual, e insere as novas (editadas)
         todos_dados = pd.DataFrame(sheet.get_all_records())
-        
-        # Garante que as colunas numéricas sejam string para salvar no sheets sem erro
-        # (O Sheets aceita, mas o Pandas às vezes cria conflito na concatenação)
-        
         if 'Usuario' in todos_dados.columns:
             todos_dados = todos_dados[todos_dados['Usuario'] != usuario_ativo]
         
         df_final = pd.concat([todos_dados, df_usuario], ignore_index=True)
-        
         sheet.clear()
         sheet.update([df_final.columns.values.tolist()] + df_final.values.tolist())
         return True
@@ -145,7 +141,7 @@ if 'logado' not in st.session_state:
 # TELA DE LOGIN / CADASTRO
 # =========================================================
 if not st.session_state['logado']:
-    st.title("⚽ Gestão de Banca")
+    st.title("⚽ ControlBET")
     
     tab1, tab2 = st.tabs(["Entrar", "Criar Conta"])
     
@@ -156,7 +152,6 @@ if not st.session_state['logado']:
             if st.form_submit_button("Entrar"):
                 df = carregar_usuarios()
                 if not df.empty and 'Usuario' in df.columns:
-                    # Converte para string para comparar com segurança
                     df['Usuario'] = df['Usuario'].astype(str)
                     df['Senha'] = df['Senha'].astype(str)
                     
@@ -186,7 +181,6 @@ if not st.session_state['logado']:
 # =========================================================
 usuario = st.session_state['usuario_atual']
 
-# Botão Sair na sidebar (discreto)
 with st.sidebar:
     st.markdown(f"**Usuário:** {usuario}")
     if st.button("Sair (Logout)"):
@@ -252,30 +246,24 @@ elif selected == "Minhas Apostas":
     df = carregar_apostas(usuario)
     
     if not df.empty:
-        # TABELA COM LISTAS SUSPENSAS
         df_edit = st.data_editor(
             df,
             num_rows="dynamic",
             column_config={
                 "Usuario": st.column_config.TextColumn(disabled=True),
                 "Time/Evento": st.column_config.TextColumn("Evento", width="medium"),
-                
-                # LISTA SUSPENSA DE RESULTADO
                 "Resultado": st.column_config.SelectboxColumn(
                     "Resultado",
                     width="small",
                     options=["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"],
                     required=True
                 ),
-                
-                # LISTA SUSPENSA DE MERCADO
                 "Mercado": st.column_config.SelectboxColumn(
                     "Mercado",
                     width="medium",
                     options=MERCADOS_FUTEBOL,
                     required=True
                 ),
-                
                 "Stake": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
                 "Lucro/Prejuizo": st.column_config.NumberColumn("Lucro", format="R$ %.2f", disabled=True),
                 "Odd": st.column_config.NumberColumn("Odd", format="%.2f", disabled=True),
@@ -317,12 +305,8 @@ elif selected == "Relatórios":
         c1.metric("Lucro", f"R$ {lucro:.2f}")
         c2.metric("ROI", f"{roi:.2f}%")
         
-        # Gráfico Evolução
         df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
-        
-        # Gráfico Pizza
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else:
         st.info("Registre apostas para ver os gráficos.")
-
