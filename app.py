@@ -194,7 +194,10 @@ with st.sidebar:
 # --- MENU ---
 selected = option_menu(
     menu_title=None,
-    options=["Registrar", "Apostas", "Relatórios"],
+    options=["
+    Registrar", "
+    Apostas", "
+    Relatórios"],
     icons=["pencil-square", "list-check", "graph-up-arrow"],
     default_index=0,
     orientation="horizontal",
@@ -367,3 +370,4 @@ elif selected == "Relatórios":
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else: st.info("Sem dados para gráficos.")
+
