@@ -42,7 +42,7 @@ def conectar_google_sheets(nome_aba):
         client = gspread.authorize(creds)
         
         try:
-            return client.open("Gestão Banca Apostas").worksheet(nome_aba)
+            return client.open("ControlBET").worksheet(nome_aba)
         except Exception as e:
             # st.error(f"Erro ao abrir aba {nome_aba}: {e}") # Descomente para debugar se precisar
             return None
@@ -74,7 +74,7 @@ def criar_novo_usuario(novo_usuario, nova_senha):
 
 def carregar_apostas(usuario_ativo):
     """Lê os dados tratando erros de cabeçalho e convertendo números"""
-    sheet = conectar_google_sheets("Página1") # Se der erro, tente "Sheet1"
+    sheet = conectar_google_sheets("Dados") # Se der erro, tente "Sheet1"
     
     if sheet:
         try:
@@ -109,7 +109,7 @@ def carregar_apostas(usuario_ativo):
     return pd.DataFrame()
 
 def salvar_aposta(nova_linha):
-    sheet = conectar_google_sheets("Página1")
+    sheet = conectar_google_sheets("Dados")
     if sheet:
         ordem = ["Usuario", "Data", "Esporte", "Time/Evento", "Mercado", "Odd", "Stake", "Retorno_Potencial", "Resultado", "Lucro/Prejuizo"]
         linha = [str(nova_linha.get(c, "")) for c in ordem]
@@ -118,7 +118,7 @@ def salvar_aposta(nova_linha):
     return False
 
 def atualizar_planilha_usuario(df_usuario, usuario_ativo):
-    sheet = conectar_google_sheets("Página1")
+    sheet = conectar_google_sheets("Dados")
     if sheet:
         # Pega TUDO, remove as linhas do usuário atual, e insere as novas (editadas)
         todos_dados = pd.DataFrame(sheet.get_all_records())
@@ -325,3 +325,4 @@ elif selected == "Relatórios":
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else:
         st.info("Registre apostas para ver os gráficos.")
+
