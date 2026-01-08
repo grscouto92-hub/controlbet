@@ -11,36 +11,55 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (CORREÇÃO DE CORES + RESPONSIVO) ---
+# --- CSS VISUAL (FUNDO PADRONIZADO E CARDS TRANSPARENTES) ---
 st.markdown("""
 <style>
+    /* === FUNDO GERAL === */
+    .stApp {
+        background-color: #f0f2f6 !important;
+    }
+    
+    section[data-testid="stSidebar"] {
+        background-color: #e8eaf0 !important;
+        border-right: 1px solid #d0d0d0;
+    }
+
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* ESTILO DOS CARDS DE MÉTRICAS (ODD, LUCRO, ROI) */
+    /* === CORREÇÃO DOS CARDS (ODD / DASHBOARD) === */
+    /* Agora eles ficam IGUAIS aos cards de aposta: Transparentes com borda cinza */
     div[data-testid="stMetric"] {
-        background-color: #f8f9fa !important; /* Fundo Cinza Claro */
-        border: 1px solid #e0e0e0 !important;
+        background-color: transparent !important; /* Fundo transparente (pega a cor do site) */
+        border: 1px solid #d0d0d0 !important;    /* Borda Cinza igual aos outros */
         padding: 10px !important;
         border-radius: 8px !important;
-        text-align: center !important;
+        box-shadow: none !important;              /* Sem sombra para ficar "Flat" */
     }
 
-    /* CORREÇÃO CRÍTICA: Obriga o texto da métrica a ser PRETO para não sumir no fundo branco */
+    /* Força Texto PRETO (Para não sumir no fundo cinza claro) */
     div[data-testid="stMetric"] label {
-        color: #000000 !important; /* Título (Ex: Odd) em Preto */
+        color: #000000 !important;
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #000000 !important; /* Valor (Ex: 1.50) em Preto */
+        color: #000000 !important;
+    }
+    div[data-testid="stMetric"] p {
+        color: #333333 !important;
     }
 
-    /* Responsivo Celular */
+    /* === RESPONSIVO CELULAR === */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
         div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
+    }
+    
+    /* Ajuste visual dos Cards de Aposta (Container nativo) para garantir borda igual */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: #d0d0d0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
