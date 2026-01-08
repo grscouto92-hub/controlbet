@@ -340,7 +340,7 @@ elif selected == "Apostas":
 # --- ABA 3: DASHBOARD PROFISSIONAL ---
 elif selected == "Dash":
     st.session_state['edit_mode'] = False
-    st.subheader("📊 Dashboard Profissional")
+    st.subheader("📊 Cards de Resultados")
     
     df = carregar_apostas(usuario)
     
@@ -397,3 +397,4 @@ elif selected == "Dash":
                 st.success(f"🚀 Você LUCROU R$ {lucro_total:.2f} neste período!")
             elif lucro_total < 0:
                 st.error(f"⚠️ Atenção! Prejuízo de R$ {lucro_total:.2f}. Revise sua gestão.")
+
