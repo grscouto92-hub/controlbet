@@ -5,7 +5,7 @@ from google.oauth2.service_account import Credentials
 from datetime import date
 
 # --- Configuração Simples ---
-st.set_page_config(page_title="ProTips | Canal Oficial", page_icon="🦁", layout="centered")
+st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
 
 # --- CSS para Estilo "Card" (Cartão de Aposta) ---
 st.markdown("""
@@ -86,7 +86,7 @@ def main():
     with col_logo:
         st.markdown("# 🦁") # Pode trocar por st.image("logo.png")
     with col_title:
-        st.markdown("### Mestre das Tips")
+        st.markdown("### GuiTips")
         st.caption("Análises profissionais de Futebol")
 
     st.divider()
@@ -166,3 +166,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
