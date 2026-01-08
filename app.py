@@ -23,8 +23,8 @@ st.markdown("""
     @media (max-width: 640px) {
         /* Diminui a fonte dos botões do menu */
         .nav-link {
-            font-size: 11px !important;
-            padding: 8px 4px !important; /* Menos preenchimento lateral */
+            font-size: 12px !important;
+            padding: 8px 6px !important; 
             margin: 0px !important;
         }
         
@@ -212,19 +212,23 @@ with st.sidebar:
         st.session_state['logado'] = False
         st.rerun()
 
-# --- MENU (OTIMIZADO PARA CELULAR) ---
-# DICA: Nomes curtos funcionam melhor no celular
+# --- MENU (ÍCONES BRANCOS QUANDO SELECIONADO) ---
 selected = option_menu(
     menu_title=None,
-    options=["Novo", "Apostas", "Dash"], # Mudei "Registrar" para "Novo" para caber melhor
-    icons=["plus-circle", "list-check", "graph-up-arrow"], # Mudei o ícone de registrar
+    options=["Novo", "Apostas", "Relatórios"], 
+    icons=["plus-circle", "list-check", "graph-up-arrow"], 
     default_index=0,
     orientation="horizontal",
     styles={
         "container": {"padding": "0!important", "background-color": "transparent"},
-        "icon": {"color": "#ff4b4b", "font-size": "16px"}, 
-        # Margem reduzida para 2px para caber no celular
-        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px 2px", "--hover-color": "#cccccc"},
+        
+        # TRUQUE AQUI: Removi a cor fixa ("color": "red") do ícone.
+        # Agora ele obedece a cor do texto:
+        # - Se selecionado: Texto Branco -> Ícone Branco
+        # - Não selecionado: Texto Cinza -> Ícone Cinza
+        "icon": {"font-size": "16px"}, 
+        
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px 2px", "--hover-color": "#eee"},
         "nav-link-selected": {"background-color": "#ff4b4b"},
     }
 )
@@ -284,7 +288,6 @@ elif selected == "Apostas":
                     
                     with col_info:
                         st.markdown(f"**{row['Time/Evento']}**")
-                        # Ajuste visual para celular (texto menor nos detalhes)
                         st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
                         
                         if "Green" in res:
@@ -362,7 +365,7 @@ elif selected == "Apostas":
                             st.rerun()
 
 # --- RELATÓRIOS ---
-elif selected == "Dash":
+elif selected == "Relatórios":
     st.session_state['edit_mode'] = False
     st.subheader("📊 Performance")
     df = carregar_apostas(usuario)
@@ -376,4 +379,3 @@ elif selected == "Dash":
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else: st.info("Sem dados para gráficos.")
-
