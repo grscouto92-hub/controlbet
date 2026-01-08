@@ -148,7 +148,7 @@ def main():
                 </div>
                 <div class="tip-bet">
                     <span>{row['Aposta']}</span>
-                    <span class="tip-odd">@{row['Odd']}</span>
+                    <span class="tip-odd">@{row['Confiança']}</span>
                 </div>
                 <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
                     💡 <i>"{row['Analise']}"</i>
@@ -171,3 +171,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
