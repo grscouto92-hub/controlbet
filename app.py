@@ -2,18 +2,16 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-# from datetime import date # Não está sendo usado, pode remover
 
-# --- Configuração Simples ---
+# --- Configuração da Página ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
 
-# --- CSS para Estilo "Card" (CORRIGIDO) ---
+# --- CSS Personalizado ---
 st.markdown("""
 <style>
-    /* Remover padding excessivo */
     .block-container { padding-top: 2rem; padding-bottom: 3rem; }
     
-    /* Estilo dos Cards de Aposta */
+    /* Estilo dos Cards */
     .tip-card {
         background-color: #1e1e1e;
         border-radius: 12px;
@@ -21,74 +19,144 @@ st.markdown("""
         margin-bottom: 15px;
         border-left: 5px solid #ff4b4b;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        color: #ffffff !important; /* <--- FORÇA O TEXTO BRANCO GERAL */
+        color: #ffffff !important;
     }
     .tip-header {
         display: flex;
         justify-content: space-between;
-        color: #aaaaaa; /* Cor cinza claro para o cabeçalho */
+        color: #aaaaaa;
         font-size: 0.8rem;
         margin-bottom: 8px;
     }
     .tip-match {
         font-size: 1.1rem;
         font-weight: bold;
-        color: #ffffff !important; /* <--- FORÇA O TÍTULO BRANCO */
+        color: #ffffff !important;
         margin-bottom: 10px;
     }
     .tip-bet {
-        background-color: #2b2b2b; /* Fundo um pouco mais claro para contraste */
+        background-color: #2b2b2b;
         padding: 10px;
         border-radius: 8px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border: 1px solid #383838;
-        color: #ffffff !important; /* <--- FORÇA O TEXTO DA APOSTA BRANCO */
+        color: #ffffff !important;
     }
     .tip-odd {
-        color: #00e676 !important; /* Verde Neon para a Odd */
+        color: #00e676 !important;
         font-weight: bold;
         font-size: 1.1rem;
     }
-    
-    /* Texto da Análise e Rodapé do Card */
-    .tip-analysis, .tip-footer {
-        color: #dddddd !important; /* Texto quase branco */
-    }
+    .tip-analysis { color: #dddddd !important; }
+    .tip-footer { color: #dddddd !important; }
 
-    /* Status Colors */
+    /* Cores de Status */
     .status-green { border-left-color: #00e676 !important; }
     .status-red { border-left-color: #ff1744 !important; }
     .status-pending { border-left-color: #ff9100 !important; }
+    
+    /* Ajuste nas abas */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #0e1117; border-radius: 5px; }
+    .stTabs [aria-selected="true"] { background-color: #262730; color: #ff4b4b !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# --- Funções Auxiliares ---
+def limpar_numero(valor):
+    """Converte strings como '1,50' ou 'R$ 1.50' para float 1.50"""
+    if isinstance(valor, (int, float)):
+        return valor
+    try:
+        # Troca vírgula por ponto e remove caracteres não numéricos exceto ponto
+        return float(str(valor).replace(',', '.'))
+    except:
+        return 0.0
+
+def calcular_resultado(row):
+    """Calcula o lucro/prejuízo da linha"""
+    status = str(row['Status']).strip().title()
+    odd = limpar_numero(row['Odd'])
+    unidades = limpar_numero(row['Unidades'])
+    
+    if status == 'Green':
+        return (odd - 1) * unidades
+    elif status == 'Red':
+        return -unidades
+    else:
+        return 0.0
+
+def exibir_card(row):
+    """Gera o HTML do card para uma linha específica"""
+    status = str(row['Status']).strip().title()
+    
+    css_class = "status-pending"
+    icone = "⏳ Pendente"
+    
+    if status == "Green": 
+        css_class = "status-green"
+        icone = "✅ Green"
+    elif status == "Red": 
+        css_class = "status-red"
+        icone = "❌ Red"
+    elif status == "Anulada":
+        icone = "🔄 Anulada"
+
+    html_card = f"""
+    <div class="tip-card {css_class}">
+        <div class="tip-header">
+            <span>⚽ {row['Liga']}</span>
+            <span>{row['Data']} • {row['Hora']}</span>
+        </div>
+        <div class="tip-match">
+            {row['Jogo']}
+        </div>
+        <div class="tip-bet">
+            <span>{row['Aposta']}</span>
+            <span class="tip-odd">@{row['Odd']}</span>
+        </div>
+        <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
+            💡 <i>"{row['Analise']}"</i>
+        </div>
+        <div class="tip-footer" style="margin-top: 10px; font-size: 0.85rem; text-align: right; font-weight: bold;">
+            {icone} | Unidades: {row['Unidades']}
+        </div>
+    </div>
+    """
+    st.markdown(html_card, unsafe_allow_html=True)
+
 # --- Conexão Google Sheets ---
-# Usa o cache para não gastar cotas da API a cada F5 do usuário
 @st.cache_data(ttl=60) 
 def carregar_tips():
     try:
-        # Verifica credenciais
         if "gcp_service_account" not in st.secrets:
-            return None
+            return pd.DataFrame()
         
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
-        # Abre a aba "Tips"
         sheet = client.open("ControlBET").worksheet("Tips")
         dados = sheet.get_all_records()
-        return pd.DataFrame(dados)
+        df = pd.DataFrame(dados)
+        
+        # Pré-processamento dos dados (Garante que Odd e Unidades sejam números)
+        if not df.empty:
+            df['Odd_Num'] = df['Odd'].apply(limpar_numero)
+            df['Unid_Num'] = df['Unidades'].apply(limpar_numero)
+            df['Lucro'] = df.apply(calcular_resultado, axis=1)
+            
+        return df
     except Exception as e:
         st.error(f"Erro ao carregar tips: {e}")
         return pd.DataFrame()
 
 # --- Lógica Principal ---
 def main():
-    # 1. Cabeçalho (Sua Marca)
+    # 1. Cabeçalho
     col_logo, col_title = st.columns([1, 4])
     with col_logo:
         st.markdown("# 🦁")
@@ -96,79 +164,101 @@ def main():
         st.markdown("### GuiTips")
         st.caption("Análises profissionais de Futebol")
 
-    st.divider()
-
-    # 2. Estatísticas Rápidas (Banner)
+    # Carrega dados
     df = carregar_tips()
     
-    if not df.empty:
-        # Filtra apenas Green e Red para estatística
-        df_res = df[df['Status'].isin(['Green', 'Red'])]
-        greens = len(df_res[df_res['Status'] == 'Green'])
-        total = len(df_res)
-        winrate = (greens / total * 100) if total > 0 else 0
-        
-        # Exibe métricas no topo
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Winrate", f"{winrate:.0f}%")
-        m2.metric("Greens", f"{greens}")
-        m3.metric("Total Calls", f"{total}")
-    
-    st.markdown("### 🔥 Palpites do Dia")
-    
-    # 3. Listagem das Tips
     if df.empty:
-        st.info("Aguardando novas entradas...")
-    else:
-        # Ordena: Mostra as últimas adicionadas primeiro
-        df = df.iloc[::-1]
+        st.warning("Não foi possível carregar os dados ou a planilha está vazia.")
+        return
 
-        for i, row in df.iterrows():
-            status = row['Status']
+    # --- SIDEBAR (Filtros) ---
+    with st.sidebar:
+        st.header("Filtros")
+        todas_ligas = df['Liga'].unique().tolist()
+        filtro_liga = st.multiselect("Selecione a Liga", todas_ligas)
+        
+        if filtro_liga:
+            df = df[df['Liga'].isin(filtro_liga)]
+
+    # --- ESTATÍSTICAS DO TOPO ---
+    df_res = df[df['Status'].isin(['Green', 'Red'])]
+    
+    greens = len(df_res[df_res['Status'] == 'Green'])
+    total_resolvidas = len(df_res)
+    winrate = (greens / total_resolvidas * 100) if total_resolvidas > 0 else 0
+    lucro_total = df_res['Lucro'].sum()
+    
+    # Formatação de cor do lucro
+    delta_color = "normal"
+    if lucro_total > 0: delta_color = "off" # Verde no st.metric padrão se usar delta, mas vamos forçar visualmente
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Winrate", f"{winrate:.0f}%")
+    c2.metric("Greens", f"{greens}")
+    c3.metric("Finalizadas", f"{total_resolvidas}")
+    c4.metric("Lucro (U)", f"{lucro_total:+.2f}")
+
+    st.divider()
+
+    # --- ABAS DE NAVEGAÇÃO ---
+    aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico e Gráficos"])
+
+    # Separa os DataFrames
+    # Consideramos "Pendente" ou qualquer coisa que não seja Green/Red/Anulada
+    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
+    df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
+
+    # --- ABA 1: JOGOS ABERTOS ---
+    with aba_jogos:
+        st.markdown("##### Próximas Entradas")
+        if df_pendentes.empty:
+            st.info("Nenhuma entrada pendente no momento.")
+        else:
+            # Ordena pendentes (opcional: mais recentes primeiro)
+            df_pendentes = df_pendentes.iloc[::-1]
+            for i, row in df_pendentes.iterrows():
+                exibir_card(row)
+
+    # --- ABA 2: HISTÓRICO ---
+    with aba_historico:
+        # Gráfico de Evolução (Só aparece se tiver dados resolvidos)
+        if not df_res.empty:
+            st.markdown("##### 📈 Evolução da Banca")
             
-            # Define classe CSS baseada no status
-            css_class = "status-pending"
-            icone = "⏳"
-            if status == "Green": 
-                css_class = "status-green"
-                icone = "✅ Green"
-            elif status == "Red": 
-                css_class = "status-red"
-                icone = "❌ Red"
+            # Prepara dados para o gráfico
+            df_chart = df_res.copy()
+            # Tenta converter data, se falhar, usa o índice original como ordem cronológica
+            try:
+                # Ajuste o formato da data conforme sua planilha (ex: %d/%m/%Y)
+                # Se der erro, ele segue sem ordenar por data, usando a ordem de inserção
+                df_chart['Data_Dt'] = pd.to_datetime(df_chart['Data'], dayfirst=True, errors='coerce')
+                df_chart = df_chart.sort_values(by='Data_Dt')
+            except:
+                pass 
+            
+            df_chart['Acumulado'] = df_chart['Lucro'].cumsum()
+            
+            # Renderiza gráfico de área
+            st.area_chart(df_chart.reset_index(), y='Acumulado', color='#00e676')
+            st.divider()
 
-            # HTML do Card (COM NOVAS CLASSES DE COR)
-            html_card = f"""
-            <div class="tip-card {css_class}">
-                <div class="tip-header">
-                    <span>⚽ {row['Liga']}</span>
-                    <span>{row['Data']} • {row['Hora']}</span>
-                </div>
-                <div class="tip-match">
-                    {row['Jogo']}
-                </div>
-                <div class="tip-bet">
-                    <span>{row['Aposta']}</span>
-                    <span class="tip-odd">@{row['Odd']}</span>
-                </div>
-                <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
-                    💡 <i>"{row['Analise']}"</i>
-                </div>
-                <div class="tip-footer" style="margin-top: 10px; font-size: 0.85rem; text-align: right; font-weight: bold;">
-                    {icone} | Unidades: {row['Unidades']}
-                </div>
-            </div>
-            """
-            st.markdown(html_card, unsafe_allow_html=True)
+        st.markdown("##### Últimos Resultados")
+        if df_historico.empty:
+            st.info("Nenhum histórico disponível com os filtros atuais.")
+        else:
+            # Mostra do mais recente para o mais antigo
+            df_historico = df_historico.iloc[::-1]
+            for i, row in df_historico.iterrows():
+                exibir_card(row)
 
-    # 4. Rodapé
+    # Rodapé
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; font-size: 12px;">
         ⚠️ Aposte com responsabilidade. +18.<br>
-        <a href="https://t.me/seulink" style="color: #ff4b4b; text-decoration: none;">Entrar no Grupo VIP Telegram</a>
+        <a href="#" style="color: #ff4b4b; text-decoration: none;">Entrar no Grupo VIP Telegram</a>
     </div>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
-
