@@ -17,6 +17,18 @@ st.set_page_config(
 )
 
 # =========================================================
+# SESSION STATE – INICIALIZAÇÃO SEGURA (ANTI-KEYERROR)
+# =========================================================
+for key, default in {
+    "logado": False,
+    "usuario": "",
+    "edit_mode": False,
+    "edit_index": None
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# =========================================================
 # CSS
 # =========================================================
 st.markdown("""
@@ -64,8 +76,7 @@ def conectar_google_sheets(aba):
 # USUÁRIOS
 # =========================================================
 def carregar_usuarios():
-    sheet = conectar_google_sheets("Credenciais")
-    return pd.DataFrame(sheet.get_all_records())
+    return pd.DataFrame(conectar_google_sheets("Credenciais").get_all_records())
 
 def criar_novo_usuario(u, s):
     sheet = conectar_google_sheets("Credenciais")
@@ -80,8 +91,7 @@ def criar_novo_usuario(u, s):
 # =========================================================
 def carregar_apostas(usuario):
     sheet = conectar_google_sheets("Dados")
-    dados = sheet.get_all_records()
-    df = pd.DataFrame(dados)
+    df = pd.DataFrame(sheet.get_all_records())
     if df.empty:
         return df
 
@@ -110,13 +120,6 @@ def atualizar_planilha(df, usuario):
     sheet.update([df_final.columns.tolist()] + df_final.values.tolist())
 
 # =========================================================
-# SESSÃO
-# =========================================================
-if 'logado' not in st.session_state:
-    st.session_state['logado'] = False
-    st.session_state['usuario'] = ""
-
-# =========================================================
 # LOGIN
 # =========================================================
 if not st.session_state['logado']:
@@ -127,7 +130,7 @@ if not st.session_state['logado']:
     with tab1:
         u = st.text_input("Usuário")
         s = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
+        if st.button("Entrar", type="primary"):
             df = carregar_usuarios()
             if not df[(df['Usuario'] == u) & (df['Senha'] == s)].empty:
                 st.session_state['logado'] = True
@@ -141,13 +144,26 @@ if not st.session_state['logado']:
         ns = st.text_input("Senha", type="password")
         if st.button("Criar Conta"):
             if criar_novo_usuario(nu, ns):
-                st.success("Conta criada!")
+                st.success("Conta criada com sucesso!")
             else:
                 st.error("Usuário já existe")
 
     st.stop()
 
+# =========================================================
+# USUÁRIO ATIVO
+# =========================================================
 usuario = st.session_state['usuario']
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+with st.sidebar:
+    st.markdown(f"**Usuário:** {usuario}")
+    if st.button("Sair"):
+        st.session_state['logado'] = False
+        st.session_state['usuario'] = ""
+        st.rerun()
 
 # =========================================================
 # MENU
@@ -155,7 +171,7 @@ usuario = st.session_state['usuario']
 menu = option_menu(
     None,
     ["Novo", "Apostas", "Dash"],
-    icons=["plus-circle", "list", "graph-up"],
+    icons=["plus-circle", "list-check", "graph-up-arrow"],
     orientation="horizontal"
 )
 
@@ -172,7 +188,7 @@ if menu == "Novo":
     retorno = st.number_input("Retorno Potencial", min_value=0.0)
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
 
-    if st.button("Salvar"):
+    if st.button("Salvar", type="primary"):
         lucro = 0
         if resultado == "Green (Venceu)":
             lucro = retorno - stake
@@ -191,7 +207,8 @@ if menu == "Novo":
             "Resultado": resultado,
             "Lucro/Prejuizo": lucro
         })
-        st.success("Salvo!")
+        st.success("Aposta salva!")
+        time.sleep(1)
         st.rerun()
 
 # =========================================================
@@ -202,9 +219,10 @@ elif menu == "Dash":
 
     df = carregar_apostas(usuario)
     if df.empty:
-        st.info("Sem dados")
+        st.info("Sem dados para análise.")
         st.stop()
 
+    # FILTROS
     with st.expander("🔎 Filtros", expanded=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -212,7 +230,11 @@ elif menu == "Dash":
         with c2:
             dfim = st.date_input("Data Final", df['Data'].max().date())
         with c3:
-            mercados = st.multiselect("Mercados", df['Mercado'].unique(), default=df['Mercado'].unique())
+            mercados = st.multiselect(
+                "Mercados",
+                df['Mercado'].unique(),
+                default=df['Mercado'].unique()
+            )
 
     df = df[
         (df['Data'].dt.date >= di) &
@@ -220,19 +242,34 @@ elif menu == "Dash":
         (df['Mercado'].isin(mercados))
     ]
 
+    if df.empty:
+        st.warning("Nenhum dado com esses filtros.")
+        st.stop()
+
+    # KPIs
     total_stake = df['Stake'].sum()
     lucro = df['Lucro/Prejuizo'].sum()
     roi = (lucro / total_stake) * 100 if total_stake > 0 else 0
     winrate = (df['Resultado'].str.contains("Green").sum() / len(df)) * 100
+    odd_media = df['Odd'].mean()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Lucro", f"R$ {lucro:.2f}")
-    c2.metric("ROI", f"{roi:.2f}%")
-    c3.metric("Winrate", f"{winrate:.1f}%")
-    c4.metric("Apostas", len(df))
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("💰 Lucro", f"R$ {lucro:.2f}")
+    c2.metric("📈 ROI", f"{roi:.2f}%")
+    c3.metric("🎯 Winrate", f"{winrate:.1f}%")
+    c4.metric("📊 Odd Média", f"{odd_media:.2f}")
+    c5.metric("🧾 Apostas", len(df))
 
+    # EVOLUÇÃO DA BANCA
     df['Acumulado'] = df['Lucro/Prejuizo'].cumsum()
-    st.plotly_chart(px.line(df, x='Data', y='Acumulado', title="Evolução da Banca"), use_container_width=True)
+    st.plotly_chart(
+        px.line(df, x='Data', y='Acumulado', title="📈 Evolução da Banca", markers=True),
+        use_container_width=True
+    )
 
-    lucro_m = df.groupby("Mercado")['Lucro/Prejuizo'].sum().reset_index()
-    st.plotly_chart(px.bar(lucro_m, x='Mercado', y='Lucro/Prejuizo', title="Lucro por Mercado"), use_container_width=True)
+    # LUCRO POR MERCADO
+    lucro_mercado = df.groupby('Mercado')['Lucro/Prejuizo'].sum().reset_index()
+    st.plotly_chart(
+        px.bar(lucro_mercado, x='Mercado', y='Lucro/Prejuizo', title="💹 Lucro por Mercado"),
+        use_container_width=True
+    )
