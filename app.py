@@ -11,7 +11,7 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (MODO ESCURO + CARDS FLAT) ---
+# --- CSS VISUAL (MODO ESCURO + CARDS FLAT + BOTÕES COMPACTOS) ---
 st.markdown("""
 <style>
     /* Espaçamento do Topo */
@@ -20,32 +20,29 @@ st.markdown("""
         padding-bottom: 5rem;
     }
     
-    /* === ESTILO DOS CARDS DE MÉTRICAS (ODD, LUCRO, ROI) === */
-    /* Fundo transparente e borda sutil para integrar ao Dark Mode */
+    /* === ESTILO DOS CARDS DE MÉTRICAS === */
     div[data-testid="stMetric"] {
-        background-color: transparent !important; /* Fundo do site */
-        border: 1px solid #444444 !important;    /* Borda Cinza Escura */
+        background-color: transparent !important;
+        border: 1px solid #444444 !important;
         padding: 10px !important;
         border-radius: 8px !important;
         color: white !important;
     }
-
-    /* Cores dos textos dentro dos cards */
-    div[data-testid="stMetric"] label {
-        color: #e0e0e0 !important; /* Título cinza claro */
-    }
-    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #ffffff !important; /* Valor branco brilhante */
-    }
+    div[data-testid="stMetric"] label { color: #e0e0e0 !important; }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
 
     /* === RESPONSIVO CELULAR === */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
         div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
+        
+        /* Ajuste para botões de ação caberem na mesma linha no celular */
+        div[data-testid="column"] { min-width: 0px !important; }
+        button { padding: 0.25rem 0.5rem !important; }
     }
     
-    /* Ajuste fino para os cards de aposta (feed) */
+    /* Ajuste fino para os cards de aposta */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-color: #444444 !important;
     }
@@ -249,16 +246,18 @@ if selected == "Novo":
                 st.rerun()
         else: st.error("Verifique os dados")
 
-# --- ABA 2: APOSTAS ---
+# --- ABA 2: APOSTAS (LISTA COM AÇÕES RÁPIDAS) ---
 elif selected == "Apostas":
     st.subheader("🗂️ Histórico")
     df = carregar_apostas(usuario)
     
     if df.empty: st.info("Sem apostas.")
     else:
-        # LISTA
+        # --- LISTA VISUAL ---
         if not st.session_state['edit_mode']:
-            st.caption("Feed de Apostas")
+            st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reembolso | ✏️Editar | 🗑️Excluir")
+            
+            # Ordenação
             try: df = df.sort_values(by='Data', ascending=False)
             except: pass
             
@@ -270,20 +269,58 @@ elif selected == "Apostas":
                 elif "Reembolso" in res: cor, icone = "orange", "🔄"
 
                 with st.container(border=True):
-                    c1, c2 = st.columns([5, 1])
-                    with c1:
-                        st.markdown(f"**{row['Time/Evento']}**")
+                    # --- LINHA 1: INFORMAÇÕES ---
+                    st.markdown(f"**{row['Time/Evento']}**")
+                    c_info1, c_info2 = st.columns([2, 1])
+                    with c_info1:
                         st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
-                        if "Green" in res: st.markdown(f":green[**+ R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
-                        elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
-                        else: st.markdown(f"**{res}** {icone}")
-                    with c2:
-                        st.write("")
-                        if st.button("✏️", key=f"e_{index}"):
-                            st.session_state['edit_mode'] = True
-                            st.session_state['edit_index'] = index
-                            st.rerun()
-        # EDIÇÃO
+                    with c_info2:
+                        if "Green" in res: st.markdown(f":green[**+ R$ {row['Lucro/Prejuizo']:.2f}**]")
+                        elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**]")
+                        else: st.markdown(f"**{res}**")
+
+                    st.divider() # Linha separadora visual
+
+                    # --- LINHA 2: BOTÕES DE AÇÃO RÁPIDA ---
+                    # 5 Colunas para 5 Ações: Green, Red, Reembolso, Editar, Excluir
+                    b_green, b_red, b_refund, b_edit, b_del = st.columns(5)
+                    
+                    # 1. GREEN
+                    if b_green.button("✅", key=f"g_{index}", help="Marcar como Green"):
+                        df.at[index, 'Resultado'] = "Green (Venceu)"
+                        df.at[index, 'Lucro/Prejuizo'] = float(row['Retorno_Potencial']) - float(row['Stake'])
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+
+                    # 2. RED
+                    if b_red.button("❌", key=f"r_{index}", help="Marcar como Red"):
+                        df.at[index, 'Resultado'] = "Red (Perdeu)"
+                        df.at[index, 'Lucro/Prejuizo'] = -float(row['Stake'])
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+
+                    # 3. REEMBOLSO
+                    if b_refund.button("🔄", key=f"rem_{index}", help="Marcar como Reembolso"):
+                        df.at[index, 'Resultado'] = "Reembolso"
+                        df.at[index, 'Lucro/Prejuizo'] = 0.0
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+
+                    # 4. EDITAR (Abre formulário)
+                    if b_edit.button("✏️", key=f"ed_{index}", help="Editar detalhes"):
+                        st.session_state['edit_mode'] = True
+                        st.session_state['edit_index'] = index
+                        st.rerun()
+
+                    # 5. EXCLUIR
+                    if b_del.button("🗑️", key=f"del_{index}", help="Excluir aposta"):
+                        df = df.drop(index)
+                        atualizar_planilha_usuario(df, usuario)
+                        st.success("Excluído!")
+                        time.sleep(0.5)
+                        st.rerun()
+
+        # --- MODO EDIÇÃO ---
         else:
             idx = st.session_state['edit_index']
             if idx not in df.index:
@@ -337,40 +374,35 @@ elif selected == "Apostas":
                         time.sleep(1)
                         st.rerun()
 
-# --- ABA 3: DASHBOARD PROFISSIONAL ---
+# --- ABA 3: DASHBOARD ---
 elif selected == "Dash":
     st.session_state['edit_mode'] = False
-    st.subheader("📊 Cards de Resultados")
+    st.subheader("📊 Dashboard Profissional")
     
     df = carregar_apostas(usuario)
     
     if df.empty:
         st.warning("Sem dados para analisar. Registre algumas apostas!")
     else:
-        # --- 1. FILTRO DE DATAS ---
         with st.expander("📅 Filtros de Data", expanded=True):
             col_d1, col_d2 = st.columns(2)
             d_inicio = col_d1.date_input("Início", date.today() - timedelta(days=30))
             d_fim = col_d2.date_input("Fim", date.today())
         
-        # Aplicando Filtro
         mask = (df['Data'] >= d_inicio) & (df['Data'] <= d_fim)
         df_filtered = df.loc[mask]
         
         if df_filtered.empty:
             st.info("Nenhuma aposta neste período.")
         else:
-            # Separa apenas as resolvidas para cálculo de Winrate/ROI
             df_resolvidas = df_filtered[df_filtered['Resultado'].isin(["Green (Venceu)", "Red (Perdeu)"])]
             
-            # --- 2. CÁLCULO DE KPIS ---
             lucro_total = df_filtered["Lucro/Prejuizo"].sum()
             total_apostado = df_filtered["Stake"].sum()
             num_apostas = len(df_filtered)
             
             roi = (lucro_total / total_apostado * 100) if total_apostado > 0 else 0.0
             
-            # Winrate e Odd Média
             win_count = len(df_resolvidas[df_resolvidas['Resultado'] == "Green (Venceu)"])
             total_res = len(df_resolvidas)
             winrate = (win_count / total_res * 100) if total_res > 0 else 0.0
@@ -380,7 +412,6 @@ elif selected == "Dash":
             
             lucro_medio = lucro_total / num_apostas if num_apostas > 0 else 0
             
-            # --- 3. EXIBIÇÃO DOS KPIS (GRID) ---
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Lucro Total", f"R$ {lucro_total:.2f}", delta=f"{lucro_total:.2f}")
             k2.metric("ROI (%)", f"{roi:.2f}%", delta_color="normal")
@@ -392,9 +423,7 @@ elif selected == "Dash":
             k6.metric("Nº Apostas", f"{num_apostas}")
             k7.metric("Lucro Médio/Bet", f"R$ {lucro_medio:.2f}")
             
-            # Se tiver lucro, mostra mensagem de incentivo
             if lucro_total > 0:
-                st.success(f"🚀 Você LUCROU R$ {lucro_total:.2f} neste período!")
+                st.success(f"🚀 Você está LUCROU R$ {lucro_total:.2f} neste período!")
             elif lucro_total < 0:
                 st.error(f"⚠️ Atenção! Prejuízo de R$ {lucro_total:.2f}. Revise sua gestão.")
-
