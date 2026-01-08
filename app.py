@@ -14,47 +14,54 @@ st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 # --- CSS VISUAL (MODO ESCURO + CARDS FLAT + BOTÕES COMPACTOS) ---
 st.markdown("""
 <style>
-    /* === 1. TEMA ESCURO === */
-    .stApp {
-        background-color: #0e1117 !important;
-        color: #ffffff !important;
-    }
-    
-    h1, h2, h3, h4, h5, h6, p, span, div, label {
-        color: #ffffff !important;
-    }
-    
-    section[data-testid="stSidebar"] {
-        background-color: #262730 !important;
-    }
-
+    /* Espaçamento do Topo */
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* === 2. CARDS (KPIs) === */
+    /* === 1. TEMA ESCURO FORÇADO === */
+    .stApp {
+        background-color: #0e1117 !important;
+        color: #ffffff !important;
+    }
+    h1, h2, h3, h4, h5, h6, p, span, div, label {
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] {
+        background-color: #262730 !important;
+    }
+
+    /* === 2. CARDS DE MÉTRICAS (TRANSPARENTES) === */
     div[data-testid="stMetric"] {
         background-color: transparent !important;
         border: 1px solid #444444 !important;
         padding: 10px !important;
         border-radius: 8px !important;
+        color: white !important;
     }
-    div[data-testid="stMetric"] label { color: #a0a0a0 !important; }
+    div[data-testid="stMetric"] label { color: #e0e0e0 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
 
-    /* === 3. BOTÕES LADO A LADO (CORREÇÃO FINAL) === */
+    /* === 3. CORREÇÃO "NUCLEAR" PARA BOTÕES LADO A LADO NO CELULAR === */
     @media (max-width: 640px) {
+        .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
+        .bi { font-size: 14px !important; margin-right: 2px !important; }
+        div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
+        
+        /* Força linha horizontal */
         div[data-testid="stHorizontalBlock"] {
             flex-wrap: nowrap !important;
             gap: 2px !important;
         }
+        /* Força largura de 20% para cada um dos 5 botões */
         div[data-testid="column"] {
             flex: 0 0 auto !important;
             width: 20% !important;
             min-width: 10px !important;
             padding: 0 !important;
         }
+        /* Botão compacto */
         div.stButton > button {
             padding: 0px !important;
             margin: 0px !important;
@@ -64,7 +71,6 @@ st.markdown("""
             font-size: 14px !important;
             border-radius: 4px !important;
         }
-        .nav-link { font-size: 11px !important; padding: 5px !important; margin: 0 !important; }
     }
     
     div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -239,20 +245,23 @@ if selected == "Novo":
     st.subheader("📝 Registrar")
     
     c1, c2 = st.columns([1, 2])
-    # Adicionei KEYs para poder limpar depois
-    with c1: data_aposta = st.date_input("Data", date.today(), key="novo_data")
-    with c2: evento = st.text_input("Evento", key="novo_evento")
+    with c1: data_aposta = st.date_input("Data", date.today())
     
-    mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL, key="novo_mercado")
+    # ADICIONEI key PARA IDENTIFICAR OS CAMPOS
+    with c2: evento = st.text_input("Evento", key="nova_bet_evento")
+    
+    mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL)
     
     c3, c4, c5 = st.columns(3)
-    with c3: stake = st.number_input("Stake", min_value=0.0, step=10.0, key="novo_stake")
-    with c4: retorno = st.number_input("Retorno", min_value=0.0, step=10.0, key="novo_retorno")
+    # ADICIONEI key
+    with c3: stake = st.number_input("Stake", min_value=0.0, step=10.0, key="nova_bet_stake")
+    with c4: retorno = st.number_input("Retorno", min_value=0.0, step=10.0, key="nova_bet_retorno")
+    
     with c5:
         if stake > 0 and retorno > 0: st.metric("Odd", f"{retorno/stake:.2f}")
         else: st.write("Odd: 0.00")
         
-    resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"], key="novo_resultado")
+    resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
     
     if st.button("💾 Salvar", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
@@ -266,24 +275,25 @@ if selected == "Novo":
                 "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
             }
             if salvar_aposta(nova):
-                # --- LIMPEZA DOS CAMPOS ---
-                st.session_state['novo_evento'] = ""
-                st.session_state['novo_stake'] = 0.0
-                st.session_state['novo_retorno'] = 0.0
-                # Data, Mercado e Resultado mantemos o último ou padrão para facilitar
-                
                 st.success("Sucesso!")
-                time.sleep(1)
+                
+                # --- LIMPEZA DOS CAMPOS ---
+                st.session_state["nova_bet_evento"] = ""
+                st.session_state["nova_bet_stake"] = 0.0
+                st.session_state["nova_bet_retorno"] = 0.0
+                
+                time.sleep(0.5)
                 st.rerun()
         else: st.error("Verifique os dados")
 
-# --- ABA 2: APOSTAS (LISTA COM AÇÕES RÁPIDAS) ---
+# --- ABA 2: APOSTAS (LISTA COM BOTÕES LADO A LADO) ---
 elif selected == "Apostas":
     st.subheader("🗂️ Histórico")
     df = carregar_apostas(usuario)
     
     if df.empty: st.info("Sem apostas.")
     else:
+        # LISTA VISUAL
         if not st.session_state['edit_mode']:
             st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reemb | ✏️Editar | 🗑️Excluir")
             try: df = df.sort_values(by='Data', ascending=False)
@@ -297,6 +307,7 @@ elif selected == "Apostas":
                 elif "Reembolso" in res: cor, icone = "orange", "🔄"
 
                 with st.container(border=True):
+                    # Info da Aposta
                     st.markdown(f"**{row['Time/Evento']}**")
                     c_info1, c_info2 = st.columns([2, 1])
                     with c_info1:
@@ -308,6 +319,7 @@ elif selected == "Apostas":
 
                     st.markdown("---") 
 
+                    # BOTÕES LADO A LADO (FORÇADOS PELO CSS)
                     cols = st.columns([1, 1, 1, 1, 1]) 
                     
                     if cols[0].button("✅", key=f"g_{index}"):
@@ -340,6 +352,7 @@ elif selected == "Apostas":
                         time.sleep(0.5)
                         st.rerun()
 
+        # MODO EDIÇÃO
         else:
             idx = st.session_state['edit_index']
             if idx not in df.index:
