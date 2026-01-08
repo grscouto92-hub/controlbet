@@ -11,22 +11,39 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (RESPONSIVO E PROFISSIONAL) ---
+# --- CSS VISUAL (CORREÇÃO DE CORES DEFINITIVA) ---
 st.markdown("""
 <style>
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
-    /* Estilo para KPIs */
+    
+    /* === CORREÇÃO DOS CARDS BRANCOS (METRICS) === */
     div[data-testid="stMetric"] {
-        background-color: #f8f9fa;
-        border: 1px solid #e0e0e0;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
+        background-color: #f8f9fa !important; /* Fundo Cinza Claro */
+        border: 1px solid #d0d0d0 !important;
+        padding: 15px !important;
+        border-radius: 10px !important;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.05); /* Sombra suave */
     }
-    /* Responsivo Celular */
+
+    /* Força o TÍTULO da métrica (ex: ROI) a ser PRETO */
+    div[data-testid="stMetric"] label {
+        color: #000000 !important;
+    }
+    
+    /* Força o VALOR da métrica (ex: 15%) a ser PRETO */
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        color: #000000 !important;
+    }
+    
+    /* Força qualquer texto pequeno dentro da métrica a ser escuro */
+    div[data-testid="stMetric"] p {
+        color: #333333 !important;
+    }
+
+    /* === RESPONSIVO CELULAR === */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
@@ -454,4 +471,3 @@ elif selected == "Dash":
             # Adiciona uma linha de zero para referência
             fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray")
             st.plotly_chart(fig_scatter, use_container_width=True)
-
