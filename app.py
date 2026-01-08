@@ -215,7 +215,7 @@ with st.sidebar:
 # --- MENU (ÍCONES BRANCOS QUANDO SELECIONADO) ---
 selected = option_menu(
     menu_title=None,
-    options=["Novo", "Apostas", "Relatórios"], 
+    options=["Novo", "Apostas", "Dash"], 
     icons=["plus-circle", "list-check", "graph-up-arrow"], 
     default_index=0,
     orientation="horizontal",
@@ -365,7 +365,7 @@ elif selected == "Apostas":
                             st.rerun()
 
 # --- RELATÓRIOS ---
-elif selected == "Relatórios":
+elif selected == "Dash":
     st.session_state['edit_mode'] = False
     st.subheader("📊 Performance")
     df = carregar_apostas(usuario)
@@ -379,3 +379,4 @@ elif selected == "Relatórios":
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else: st.info("Sem dados para gráficos.")
+
