@@ -11,50 +11,66 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (CORREÇÃO DE ALINHAMENTO DOS BOTÕES) ---
+# --- CSS VISUAL (MODO ESCURO + BOTÕES LADO A LADO NO MOBILE) ---
 st.markdown("""
 <style>
-    /* Espaçamento do Topo */
+    /* === 1. FORÇA O TEMA ESCURO === */
+    .stApp {
+        background-color: #0e1117 !important;
+        color: #ffffff !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6, p, span, div, label {
+        color: #ffffff !important;
+    }
+    
+    section[data-testid="stSidebar"] {
+        background-color: #262730 !important;
+    }
+
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* === ESTILO DOS CARDS DE MÉTRICAS === */
+    /* === 2. ESTILO DOS CARDS (Métricas) === */
     div[data-testid="stMetric"] {
         background-color: transparent !important;
         border: 1px solid #444444 !important;
         padding: 10px !important;
         border-radius: 8px !important;
-        color: white !important;
     }
-    div[data-testid="stMetric"] label { color: #e0e0e0 !important; }
+    div[data-testid="stMetric"] label { color: #a0a0a0 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
 
-    /* === CORREÇÃO DOS BOTÕES LADO A LADO NO CELULAR === */
-    /* Isso impede que o Streamlit empilhe as colunas em telas pequenas */
+    /* === 3. CORREÇÃO: BOTÕES LADO A LADO NO CELULAR === */
+    
+    /* Regra Geral: Impede que colunas tenham largura mínima grande */
     div[data-testid="column"] {
         width: auto !important;
         flex: 1 1 auto !important;
-        min-width: 1px !important; /* O segredo: permite que a coluna fique muito pequena sem quebrar */
+        min-width: 1px !important;
     }
 
-    /* Estilo dos botões de ação para serem compactos */
-    div.stButton > button {
-        padding: 0.2rem 0.5rem !important; /* Botão mais fino */
-        font-size: 14px !important;
-        width: 100% !important; /* Ocupa todo o espaço da coluninha */
-        min-height: 40px !important;
-    }
-
-    /* === RESPONSIVO CELULAR === */
+    /* ESTILO RESPONSIVO (Só para celular) */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
+        div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
         
-        /* Ajuste extra para garantir que caibam 5 na linha */
+        /* O SEGREDO: Reduz padding das colunas para caber 5 na tela */
         div[data-testid="column"] {
-            padding: 0 2px !important; /* Reduz espaço entre colunas */
+            padding: 0 1px !important; 
+        }
+
+        /* Espreme o botão para caber */
+        div.stButton > button {
+            padding: 0px !important; /* Sem enchimento interno */
+            margin: 0px !important;  /* Sem margem externa */
+            width: 100% !important;  /* Ocupa 100% da coluninha */
+            min-height: 35px !important;
+            font-size: 14px !important;
+            line-height: 1 !important;
         }
     }
     
@@ -118,7 +134,6 @@ def carregar_apostas(usuario_ativo):
             rows = dados_brutos[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Limpeza e Conversão
             cols_num = ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']
             for col in cols_num:
                 if col in df.columns:
@@ -266,6 +281,7 @@ elif selected == "Apostas":
     
     if df.empty: st.info("Sem apostas.")
     else:
+        # LISTA VISUAL
         if not st.session_state['edit_mode']:
             st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reemb | ✏️Editar | 🗑️Excluir")
             try: df = df.sort_values(by='Data', ascending=False)
@@ -279,20 +295,20 @@ elif selected == "Apostas":
                 elif "Reembolso" in res: cor, icone = "orange", "🔄"
 
                 with st.container(border=True):
-                    # Informações
+                    # Info da Aposta
+                    st.markdown(f"**{row['Time/Evento']}**")
                     c_info1, c_info2 = st.columns([2, 1])
                     with c_info1:
-                        st.markdown(f"**{row['Time/Evento']}**")
                         st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
                     with c_info2:
                         if "Green" in res: st.markdown(f":green[**R$ {row['Lucro/Prejuizo']:.2f}**]")
                         elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**]")
                         else: st.markdown(f"**{res}**")
 
-                    st.markdown("---") # Linha fina separando
+                    st.markdown("---") 
 
-                    # BOTÕES LADO A LADO
-                    # gap="small" aproxima os botões
+                    # BOTÕES LADO A LADO (FORÇADOS PELO CSS)
+                    # Usamos gap="small" para aproximar
                     cols = st.columns([1, 1, 1, 1, 1], gap="small")
                     
                     if cols[0].button("✅", key=f"g_{index}"):
@@ -321,7 +337,7 @@ elif selected == "Apostas":
                     if cols[4].button("🗑️", key=f"dl_{index}"):
                         df = df.drop(index)
                         atualizar_planilha_usuario(df, usuario)
-                        st.success("Deletado!")
+                        st.success("Apagado!")
                         time.sleep(0.5)
                         st.rerun()
 
