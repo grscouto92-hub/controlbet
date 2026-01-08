@@ -11,53 +11,32 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (FUNDO NOVO + CORREÇÕES ANTERIORES) ---
+# --- CSS VISUAL (CORREÇÃO DE CORES + RESPONSIVO) ---
 st.markdown("""
 <style>
-    /* === NOVO: MUDANÇA DE FUNDO GERAL === */
-    /* Cor de fundo principal do aplicativo */
-    .stApp {
-        background-color: #f0f2f6 !important;
-    }
-    
-    /* Cor de fundo da barra lateral (sidebar) */
-    section[data-testid="stSidebar"] {
-        background-color: #e8eaf0 !important;
-        border-right: 1px solid #d0d0d0;
-    }
-
-    /* Ajuste de espaçamento do contêiner principal */
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* === CORREÇÃO DOS CARDS BRANCOS (METRICS) === */
-    /* Mantemos o fundo dos cards claro para contraste com o novo fundo geral */
+    /* ESTILO DOS CARDS DE MÉTRICAS (ODD, LUCRO, ROI) */
     div[data-testid="stMetric"] {
-        background-color: #ffffff !important; /* Mudei para branco puro para destacar mais */
-        border: 1px solid #d0d0d0 !important;
-        padding: 15px !important;
-        border-radius: 10px !important;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.08); /* Sombra um pouco mais marcada */
+        background-color: #f8f9fa !important; /* Fundo Cinza Claro */
+        border: 1px solid #e0e0e0 !important;
+        padding: 10px !important;
+        border-radius: 8px !important;
+        text-align: center !important;
     }
 
-    /* Força o TÍTULO da métrica a ser PRETO */
+    /* CORREÇÃO CRÍTICA: Obriga o texto da métrica a ser PRETO para não sumir no fundo branco */
     div[data-testid="stMetric"] label {
-        color: #000000 !important;
+        color: #000000 !important; /* Título (Ex: Odd) em Preto */
     }
-    
-    /* Força o VALOR da métrica a ser PRETO */
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #000000 !important;
-    }
-    
-    /* Força texto pequeno dentro da métrica a ser escuro */
-    div[data-testid="stMetric"] p {
-        color: #333333 !important;
+        color: #000000 !important; /* Valor (Ex: 1.50) em Preto */
     }
 
-    /* === RESPONSIVO CELULAR === */
+    /* Responsivo Celular */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
