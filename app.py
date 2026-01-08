@@ -10,18 +10,41 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (AJUSTE DE TOPO E CARTÕES) ---
+# --- CSS VISUAL (RESPONSIVO PARA CELULAR) ---
 st.markdown("""
 <style>
-    /* Empurra o conteúdo para baixo */
+    /* Ajuste para o conteúdo não ficar escondido atrás do menu */
     .block-container {
-        padding-top: 4rem;
+        padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
-    /* Estilo para deixar os cartões mais bonitos */
+
+    /* CSS RESPONSIVO: Ajustes específicos para Celular (telas < 640px) */
+    @media (max-width: 640px) {
+        /* Diminui a fonte dos botões do menu */
+        .nav-link {
+            font-size: 11px !important;
+            padding: 8px 4px !important; /* Menos preenchimento lateral */
+            margin: 0px !important;
+        }
+        
+        /* Diminui o ícone */
+        .bi {
+            font-size: 14px !important;
+            margin-right: 2px !important;
+        }
+
+        /* Ajuste do container para usar 100% da largura no celular */
+        div[data-testid="stVerticalBlock"] > div {
+            width: 100% !important;
+        }
+    }
+    
+    /* Melhora visual dos Cards de aposta */
     div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 10px;
         margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -102,8 +125,6 @@ def carregar_apostas(usuario_ativo):
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
             df_user = df[df['Usuario'] == usuario_ativo].copy()
-            # Ordena da mais recente para a mais antiga (opcional, mas bom para feed)
-            # Se der erro na ordenação, ele segue sem ordenar
             try:
                 df_user = df_user.sort_index(ascending=False)
             except: pass
@@ -191,25 +212,27 @@ with st.sidebar:
         st.session_state['logado'] = False
         st.rerun()
 
-# --- MENU ---
+# --- MENU (OTIMIZADO PARA CELULAR) ---
+# DICA: Nomes curtos funcionam melhor no celular
 selected = option_menu(
     menu_title=None,
-    options=["Registrar", "Apostas", "Relatórios"],
-    icons=["pencil-square", "list-check", "graph-up-arrow"],
+    options=["Novo", "Apostas", "Relatórios"], # Mudei "Registrar" para "Novo" para caber melhor
+    icons=["plus-circle", "list-check", "graph-up-arrow"], # Mudei o ícone de registrar
     default_index=0,
     orientation="horizontal",
     styles={
         "container": {"padding": "0!important", "background-color": "transparent"},
-        "icon": {"color": "#ff4b4b", "font-size": "18px"}, 
-        "nav-link": {"font-size": "15px", "text-align": "center", "margin":"5px", "--hover-color": "#cccccc"},
+        "icon": {"color": "#ff4b4b", "font-size": "16px"}, 
+        # Margem reduzida para 2px para caber no celular
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px 2px", "--hover-color": "#cccccc"},
         "nav-link-selected": {"background-color": "#ff4b4b"},
     }
 )
 
-# --- REGISTRAR ---
-if selected == "Registrar":
+# --- ABA 1: NOVO (REGISTRAR) ---
+if selected == "Novo":
     st.session_state['edit_mode'] = False
-    st.subheader("📝 Registrar Entrada")
+    st.subheader("📝 Novo Registro")
     c1, c2 = st.columns([1, 2])
     with c1: data_aposta = st.date_input("Data", date.today())
     with c2: evento = st.text_input("Evento (Ex: Fla x Flu)")
@@ -239,7 +262,7 @@ if selected == "Registrar":
 
 # --- APOSTAS (LISTA VISUAL) ---
 elif selected == "Apostas":
-    st.subheader("🗂️ Minhas Apostas")
+    st.subheader("🗂️ Histórico")
     df = carregar_apostas(usuario)
     
     if df.empty:
@@ -247,60 +270,46 @@ elif selected == "Apostas":
     else:
         # === MODO LISTA VISUAL (FEED) ===
         if not st.session_state['edit_mode']:
-            st.caption("Clique no botão 'Editar' para alterar.")
+            st.caption("Toque em ✏️ para editar.")
             
-            # Loop para criar os cartões
             for index, row in df.iterrows():
-                # Define cor da borda/status visual
                 res = row['Resultado']
-                cor_status = "gray"
                 icone = "⏳"
-                if "Green" in res: 
-                    cor_status = "green"
-                    icone = "✅"
-                elif "Red" in res: 
-                    cor_status = "red"
-                    icone = "❌"
-                elif "Reembolso" in res:
-                    cor_status = "orange"
-                    icone = "🔄"
+                if "Green" in res: icone = "✅"
+                elif "Red" in res: icone = "❌"
+                elif "Reembolso" in res: icone = "🔄"
 
-                # Cria o Cartão (Container)
                 with st.container(border=True):
-                    col_info, col_btn = st.columns([4, 1])
+                    col_info, col_btn = st.columns([5, 1])
                     
                     with col_info:
                         st.markdown(f"**{row['Time/Evento']}**")
-                        st.caption(f"{row['Data']} | {row['Mercado']}")
+                        # Ajuste visual para celular (texto menor nos detalhes)
+                        st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
                         
-                        # Mostra Lucro/Prejuízo colorido
                         if "Green" in res:
-                            st.markdown(f":green[**Lucro: R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
+                            st.markdown(f":green[**+ R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
                         elif "Red" in res:
-                            st.markdown(f":red[**Prejuízo: R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
+                            st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
                         else:
-                            st.markdown(f"**Status:** {res} {icone}")
+                            st.markdown(f"**{res}** {icone}")
 
                     with col_btn:
-                        # Botão de editar alinhado verticalmente
-                        st.write("") # Espaço vazio para alinhar
+                        st.write("") 
                         if st.button("✏️", key=f"btn_edit_{index}"):
                             st.session_state['edit_mode'] = True
                             st.session_state['edit_index'] = index
                             st.rerun()
 
-        # === MODO EDIÇÃO (FORMULÁRIO) ===
+        # === MODO EDIÇÃO ===
         else:
             idx = st.session_state['edit_index']
-            # Garante que o índice existe (caso atualização de planilha tenha mudado algo)
             if idx not in df.index:
-                st.error("Erro ao localizar a aposta. Tente recarregar.")
                 st.session_state['edit_mode'] = False
                 st.rerun()
 
             linha_atual = df.loc[idx]
-            
-            st.markdown(f"### ✏️ Editando: {linha_atual['Time/Evento']}")
+            st.markdown(f"**Editando:** {linha_atual['Time/Evento']}")
             
             with st.container(border=True):
                 try: data_padrao = datetime.strptime(linha_atual['Data'], '%Y-%m-%d').date()
@@ -331,7 +340,7 @@ elif selected == "Apostas":
                         st.rerun()
                 
                 with c_b2:
-                    if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
+                    if st.button("💾 Salvar", type="primary", use_container_width=True):
                         novo_lucro = 0.0
                         if novo_resultado == "Green (Venceu)": novo_lucro = novo_retorno - novo_stake
                         elif novo_resultado == "Red (Perdeu)": novo_lucro = -novo_stake
@@ -367,5 +376,3 @@ elif selected == "Relatórios":
         st.plotly_chart(px.line(df, y='Acumulado', title="Evolução da Banca"), use_container_width=True)
         st.plotly_chart(px.pie(df, names='Mercado', values='Stake', title="Distribuição por Mercado"), use_container_width=True)
     else: st.info("Sem dados para gráficos.")
-
-
