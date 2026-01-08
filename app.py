@@ -11,16 +11,10 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (MODO ESCURO + CARDS FLAT + BOTÕES COMPACTOS) ---
+# --- CSS VISUAL ---
 st.markdown("""
 <style>
-    /* Espaçamento do Topo */
-    .block-container {
-        padding-top: 3.5rem;
-        padding-bottom: 5rem;
-    }
-    
-    /* === ESTILO DOS CARDS DE MÉTRICAS === */
+    .block-container { padding-top: 3.5rem; padding-bottom: 5rem; }
     div[data-testid="stMetric"] {
         background-color: transparent !important;
         border: 1px solid #444444 !important;
@@ -30,22 +24,14 @@ st.markdown("""
     }
     div[data-testid="stMetric"] label { color: #e0e0e0 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
-
-    /* === RESPONSIVO CELULAR === */
     @media (max-width: 640px) {
         .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
         .bi { font-size: 14px !important; margin-right: 2px !important; }
         div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
-        
-        /* Ajuste para botões de ação caberem na mesma linha no celular */
         div[data-testid="column"] { min-width: 0px !important; }
         button { padding: 0.25rem 0.5rem !important; }
     }
-    
-    /* Ajuste fino para os cards de aposta */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: #444444 !important;
-    }
+    div[data-testid="stVerticalBlockBorderWrapper"] { border-color: #444444 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -102,18 +88,15 @@ def carregar_apostas(usuario_ativo):
             rows = dados_brutos[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Limpeza e Conversão de Tipos
             cols_num = ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']
             for col in cols_num:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.replace(',', '.')
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
-            # Filtra usuário
             if 'Usuario' in df.columns:
                 df = df[df['Usuario'] == usuario_ativo].copy()
 
-            # Converte Data
             if 'Data' in df.columns:
                 df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
                 
@@ -137,7 +120,6 @@ def atualizar_planilha_usuario(df_usuario, usuario_ativo):
         if 'Usuario' in todos.columns:
             todos = todos[todos['Usuario'] != usuario_ativo]
         
-        # Converte data para string antes de salvar
         if 'Data' in df_usuario.columns:
             df_usuario['Data'] = df_usuario['Data'].astype(str)
             
@@ -199,7 +181,7 @@ with st.sidebar:
         st.session_state['logado'] = False
         st.rerun()
 
-# --- MENU PRINCIPAL (ALTERADO PARA KPI's) ---
+# --- MENU PRINCIPAL ---
 selected = option_menu(
     menu_title=None,
     options=["Novo", "Apostas", "KPI's"], 
@@ -214,12 +196,12 @@ selected = option_menu(
     }
 )
 
-# --- ABA 1: NOVO (Com limpeza automática de campos) ---
+# --- ABA 1: NOVO (CORRIGIDO COM CALLBACK) ---
 if selected == "Novo":
     st.session_state['edit_mode'] = False
     st.subheader("📝 Registrar")
     
-    # 1. Inicializa variáveis no Session State se não existirem
+    # 1. Inicializa variáveis no Session State
     if 'n_data' not in st.session_state: st.session_state.n_data = date.today()
     if 'n_evento' not in st.session_state: st.session_state.n_evento = ""
     if 'n_mercado' not in st.session_state: st.session_state.n_mercado = MERCADOS_FUTEBOL[0]
@@ -227,7 +209,49 @@ if selected == "Novo":
     if 'n_retorno' not in st.session_state: st.session_state.n_retorno = 0.0
     if 'n_resultado' not in st.session_state: st.session_state.n_resultado = "Pendente"
 
-    # 2. Construção dos Inputs vinculados às Keys
+    # --- CALLBACK PARA LIMPEZA SEGURA ---
+    def salvar_callback():
+        # Captura os dados atuais do estado
+        u_atual = st.session_state['usuario_atual']
+        s_data = st.session_state.n_data
+        s_evento = st.session_state.n_evento
+        s_mercado = st.session_state.n_mercado
+        s_stake = st.session_state.n_stake
+        s_retorno = st.session_state.n_retorno
+        s_resultado = st.session_state.n_resultado
+
+        if s_stake > 0 and s_retorno >= s_stake and s_evento:
+            lucro = 0.0
+            if "Green" in s_resultado: lucro = s_retorno - s_stake
+            elif "Red" in s_resultado: lucro = -s_stake
+            
+            nova = {
+                "Usuario": u_atual, 
+                "Data": str(s_data), 
+                "Esporte": "Futebol",
+                "Time/Evento": s_evento, 
+                "Mercado": s_mercado, 
+                "Odd": round(s_retorno/s_stake, 2) if s_stake > 0 else 0,
+                "Stake": s_stake, 
+                "Retorno_Potencial": s_retorno, 
+                "Resultado": s_resultado, 
+                "Lucro/Prejuizo": lucro
+            }
+            
+            if salvar_aposta(nova):
+                st.session_state['msg_sucesso'] = True
+                # LIMPEZA DOS CAMPOS (Seguro fazer aqui dentro do callback)
+                st.session_state.n_evento = ""
+                st.session_state.n_stake = 0.0
+                st.session_state.n_retorno = 0.0
+                st.session_state.n_resultado = "Pendente"
+                # st.session_state.n_mercado = MERCADOS_FUTEBOL[0] # Se quiser limpar mercado também
+            else:
+                st.session_state['msg_erro'] = "Erro ao conectar com a planilha."
+        else:
+            st.session_state['msg_erro'] = "Preencha o Evento e verifique se Stake > 0."
+
+    # 2. Inputs vinculados às Keys
     c1, c2 = st.columns([1, 2])
     data_aposta = c1.date_input("Data", key="n_data")
     evento = c2.text_input("Evento", key="n_evento")
@@ -246,42 +270,17 @@ if selected == "Novo":
         
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"], key="n_resultado")
     
-    # 3. Lógica do Botão Salvar
-    if st.button("💾 Salvar", type="primary", use_container_width=True):
-        if stake > 0 and retorno >= stake and evento:
-            lucro = 0.0
-            if "Green" in resultado: lucro = retorno - stake
-            elif "Red" in resultado: lucro = -stake
-            
-            nova = {
-                "Usuario": usuario, 
-                "Data": str(data_aposta), 
-                "Esporte": "Futebol",
-                "Time/Evento": evento, 
-                "Mercado": mercado, 
-                "Odd": round(retorno/stake, 2) if stake > 0 else 0,
-                "Stake": stake, 
-                "Retorno_Potencial": retorno, 
-                "Resultado": resultado, 
-                "Lucro/Prejuizo": lucro
-            }
-            
-            if salvar_aposta(nova):
-                st.success("Aposta registrada!")
-                
-                # --- LIMPEZA FORÇADA DOS CAMPOS ---
-                # Isso atualiza o Session State antes do rerun, garantindo que os campos voltem vazios
-                st.session_state['n_evento'] = ""
-                st.session_state['n_stake'] = 0.0
-                st.session_state['n_retorno'] = 0.0
-                st.session_state['n_resultado'] = "Pendente"
-                # Opcional: manter data e mercado para facilitar lançamentos em sequência
-                # st.session_state['n_data'] = date.today() 
-                
-                time.sleep(0.5)
-                st.rerun()
-        else: 
-            st.error("Verifique: Stake > 0 e nome do Evento preenchido.")
+    # 3. Botão chama o Callback
+    st.button("💾 Salvar", type="primary", use_container_width=True, on_click=salvar_callback)
+
+    # 4. Exibir Mensagens Pós-Rerun
+    if st.session_state.get('msg_sucesso'):
+        st.success("Aposta registrada com sucesso!")
+        st.session_state['msg_sucesso'] = False # Reseta flag
+    
+    if st.session_state.get('msg_erro'):
+        st.error(st.session_state['msg_erro'])
+        st.session_state['msg_erro'] = None
 
 # --- ABA 2: APOSTAS (LISTA COM AÇÕES RÁPIDAS) ---
 elif selected == "Apostas":
@@ -294,7 +293,6 @@ elif selected == "Apostas":
         if not st.session_state['edit_mode']:
             st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reembolso | ✏️Editar | 🗑️Excluir")
             
-            # Ordenação
             try: df = df.sort_values(by='Data', ascending=False)
             except: pass
             
@@ -316,39 +314,34 @@ elif selected == "Apostas":
                         elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**]")
                         else: st.markdown(f"**{res}**")
 
-                    st.divider() # Linha separadora visual
+                    st.divider()
 
                     # --- LINHA 2: BOTÕES DE AÇÃO RÁPIDA ---
                     b_green, b_red, b_refund, b_edit, b_del = st.columns(5)
                     
-                    # 1. GREEN
                     if b_green.button("✅", key=f"g_{index}", help="Marcar como Green"):
                         df.at[index, 'Resultado'] = "Green (Venceu)"
                         df.at[index, 'Lucro/Prejuizo'] = float(row['Retorno_Potencial']) - float(row['Stake'])
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 2. RED
                     if b_red.button("❌", key=f"r_{index}", help="Marcar como Red"):
                         df.at[index, 'Resultado'] = "Red (Perdeu)"
                         df.at[index, 'Lucro/Prejuizo'] = -float(row['Stake'])
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 3. REEMBOLSO
                     if b_refund.button("🔄", key=f"rem_{index}", help="Marcar como Reembolso"):
                         df.at[index, 'Resultado'] = "Reembolso"
                         df.at[index, 'Lucro/Prejuizo'] = 0.0
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 4. EDITAR (Abre formulário)
                     if b_edit.button("✏️", key=f"ed_{index}", help="Editar detalhes"):
                         st.session_state['edit_mode'] = True
                         st.session_state['edit_index'] = index
                         st.rerun()
 
-                    # 5. EXCLUIR
                     if b_del.button("🗑️", key=f"del_{index}", help="Excluir aposta"):
                         df = df.drop(index)
                         atualizar_planilha_usuario(df, usuario)
@@ -410,7 +403,7 @@ elif selected == "Apostas":
                         time.sleep(1)
                         st.rerun()
 
-# --- ABA 3: KPI's (NOME ATUALIZADO) ---
+# --- ABA 3: KPI's ---
 elif selected == "KPI's":
     st.session_state['edit_mode'] = False
     st.subheader("📊 KPI's Profissionais")
