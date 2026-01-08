@@ -11,38 +11,73 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (MODO ESCURO + CARDS FLAT + BOTÕES COMPACTOS) ---
+# --- CSS VISUAL (NUCLEAR: FORÇAR 5 BOTÕES NA LINHA) ---
 st.markdown("""
 <style>
-    /* Espaçamento do Topo */
+    /* === 1. TEMA ESCURO === */
+    .stApp {
+        background-color: #0e1117 !important;
+        color: #ffffff !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6, p, span, div, label {
+        color: #ffffff !important;
+    }
+    
+    section[data-testid="stSidebar"] {
+        background-color: #262730 !important;
+    }
+
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* === ESTILO DOS CARDS DE MÉTRICAS === */
+    /* === 2. CARDS (KPIs) === */
     div[data-testid="stMetric"] {
         background-color: transparent !important;
         border: 1px solid #444444 !important;
         padding: 10px !important;
         border-radius: 8px !important;
-        color: white !important;
     }
-    div[data-testid="stMetric"] label { color: #e0e0e0 !important; }
+    div[data-testid="stMetric"] label { color: #a0a0a0 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
 
-    /* === RESPONSIVO CELULAR === */
+    /* === 3. BOTÕES LADO A LADO (CORREÇÃO FINAL) === */
+    
+    /* Regra para telas pequenas (Celular) */
     @media (max-width: 640px) {
-        .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
-        .bi { font-size: 14px !important; margin-right: 2px !important; }
-        div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
         
-        /* Ajuste para botões de ação caberem na mesma linha no celular */
-        div[data-testid="column"] { min-width: 0px !important; }
-        button { padding: 0.25rem 0.5rem !important; }
+        /* Força o container das colunas a não quebrar linha */
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap !important;
+            gap: 2px !important;
+        }
+
+        /* OBRIGA cada coluna a ter exatamente 20% de largura (100% / 5 botões) */
+        div[data-testid="column"] {
+            flex: 0 0 auto !important;
+            width: 20% !important;
+            min-width: 10px !important;
+            padding: 0 !important;
+        }
+
+        /* Estilo do Botão no Celular: Pequeno e Compacto */
+        div.stButton > button {
+            padding: 0px !important;
+            margin: 0px !important;
+            height: 35px !important;
+            min-height: 35px !important;
+            width: 100% !important;
+            font-size: 14px !important;
+            border-radius: 4px !important;
+        }
+        
+        /* Ajuste Menu Superior */
+        .nav-link { font-size: 11px !important; padding: 5px !important; margin: 0 !important; }
     }
     
-    /* Ajuste fino para os cards de aposta */
+    /* Ajuste Borda Cards Feed */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-color: #444444 !important;
     }
@@ -102,18 +137,15 @@ def carregar_apostas(usuario_ativo):
             rows = dados_brutos[1:]
             df = pd.DataFrame(rows, columns=header)
             
-            # Limpeza e Conversão de Tipos
             cols_num = ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']
             for col in cols_num:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.replace(',', '.')
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
             
-            # Filtra usuário
             if 'Usuario' in df.columns:
                 df = df[df['Usuario'] == usuario_ativo].copy()
 
-            # Converte Data
             if 'Data' in df.columns:
                 df['Data'] = pd.to_datetime(df['Data'], errors='coerce').dt.date
                 
@@ -137,7 +169,6 @@ def atualizar_planilha_usuario(df_usuario, usuario_ativo):
         if 'Usuario' in todos.columns:
             todos = todos[todos['Usuario'] != usuario_ativo]
         
-        # Converte data para string antes de salvar
         if 'Data' in df_usuario.columns:
             df_usuario['Data'] = df_usuario['Data'].astype(str)
             
@@ -246,18 +277,16 @@ if selected == "Novo":
                 st.rerun()
         else: st.error("Verifique os dados")
 
-# --- ABA 2: APOSTAS (LISTA COM AÇÕES RÁPIDAS) ---
+# --- ABA 2: APOSTAS (LISTA COM BOTÕES LADO A LADO) ---
 elif selected == "Apostas":
     st.subheader("🗂️ Histórico")
     df = carregar_apostas(usuario)
     
     if df.empty: st.info("Sem apostas.")
     else:
-        # --- LISTA VISUAL ---
+        # LISTA VISUAL
         if not st.session_state['edit_mode']:
-            st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reembolso | ✏️Editar | 🗑️Excluir")
-            
-            # Ordenação
+            st.caption("Ações Rápidas: ✅Green | ❌Red | 🔄Reemb | ✏️Editar | 🗑️Excluir")
             try: df = df.sort_values(by='Data', ascending=False)
             except: pass
             
@@ -269,58 +298,52 @@ elif selected == "Apostas":
                 elif "Reembolso" in res: cor, icone = "orange", "🔄"
 
                 with st.container(border=True):
-                    # --- LINHA 1: INFORMAÇÕES ---
+                    # Info da Aposta
                     st.markdown(f"**{row['Time/Evento']}**")
                     c_info1, c_info2 = st.columns([2, 1])
                     with c_info1:
                         st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
                     with c_info2:
-                        if "Green" in res: st.markdown(f":green[**+ R$ {row['Lucro/Prejuizo']:.2f}**]")
+                        if "Green" in res: st.markdown(f":green[**R$ {row['Lucro/Prejuizo']:.2f}**]")
                         elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**]")
                         else: st.markdown(f"**{res}**")
 
-                    st.divider() # Linha separadora visual
+                    st.markdown("---") 
 
-                    # --- LINHA 2: BOTÕES DE AÇÃO RÁPIDA ---
-                    # 5 Colunas para 5 Ações: Green, Red, Reembolso, Editar, Excluir
-                    b_green, b_red, b_refund, b_edit, b_del = st.columns(5)
+                    # BOTÕES LADO A LADO (FORÇADOS PELO CSS)
+                    cols = st.columns([1, 1, 1, 1, 1]) 
                     
-                    # 1. GREEN
-                    if b_green.button("✅", key=f"g_{index}", help="Marcar como Green"):
+                    if cols[0].button("✅", key=f"g_{index}"):
                         df.at[index, 'Resultado'] = "Green (Venceu)"
                         df.at[index, 'Lucro/Prejuizo'] = float(row['Retorno_Potencial']) - float(row['Stake'])
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 2. RED
-                    if b_red.button("❌", key=f"r_{index}", help="Marcar como Red"):
+                    if cols[1].button("❌", key=f"r_{index}"):
                         df.at[index, 'Resultado'] = "Red (Perdeu)"
                         df.at[index, 'Lucro/Prejuizo'] = -float(row['Stake'])
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 3. REEMBOLSO
-                    if b_refund.button("🔄", key=f"rem_{index}", help="Marcar como Reembolso"):
+                    if cols[2].button("🔄", key=f"re_{index}"):
                         df.at[index, 'Resultado'] = "Reembolso"
                         df.at[index, 'Lucro/Prejuizo'] = 0.0
                         atualizar_planilha_usuario(df, usuario)
                         st.rerun()
 
-                    # 4. EDITAR (Abre formulário)
-                    if b_edit.button("✏️", key=f"ed_{index}", help="Editar detalhes"):
+                    if cols[3].button("✏️", key=f"ed_{index}"):
                         st.session_state['edit_mode'] = True
                         st.session_state['edit_index'] = index
                         st.rerun()
 
-                    # 5. EXCLUIR
-                    if b_del.button("🗑️", key=f"del_{index}", help="Excluir aposta"):
+                    if cols[4].button("🗑️", key=f"dl_{index}"):
                         df = df.drop(index)
                         atualizar_planilha_usuario(df, usuario)
-                        st.success("Excluído!")
+                        st.success("Apagado!")
                         time.sleep(0.5)
                         st.rerun()
 
-        # --- MODO EDIÇÃO ---
+        # MODO EDIÇÃO
         else:
             idx = st.session_state['edit_index']
             if idx not in df.index:
@@ -374,7 +397,7 @@ elif selected == "Apostas":
                         time.sleep(1)
                         st.rerun()
 
-# --- ABA 3: DASHBOARD ---
+# --- ABA 3: DASH ---
 elif selected == "Dash":
     st.session_state['edit_mode'] = False
     st.subheader("📊 Dashboard Profissional")
