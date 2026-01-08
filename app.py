@@ -276,7 +276,7 @@ selected = option_menu(
     }
 )
 
-# --- ABA 1: NOVO REGISTRO (Melhorado com Competição) ---
+# --- ABA 1: NOVO REGISTRO ---
 if selected == "Novo Registro":
     st.session_state['edit_mode'] = False
     
@@ -307,7 +307,7 @@ if selected == "Novo Registro":
                     "Usuario": usuario, 
                     "Data": str(st.session_state.n_data), 
                     "Esporte": "Futebol",
-                    "Competicao": st.session_state.n_comp.upper(), # Novo campo
+                    "Competicao": st.session_state.n_comp.upper(), 
                     "Time/Evento": st.session_state.n_evento, 
                     "Mercado": st.session_state.n_mercado, 
                     "Odd": round(s_retorno/s_stake, 2) if s_stake > 0 else 0,
@@ -343,5 +343,278 @@ if selected == "Novo Registro":
             st.caption("Cálculo de Stake e Odds")
             
             c6, c7, c8 = st.columns(3)
-            stake = c6.number_input("Valor da Aposta (R$)", min_value=0.0, step=10.0, format="%.2f", key="n_stake")
-            retorno = c7.number_input("Retorno Total (
+            # AQUI ESTAVA O ERRO ANTERIOR - CORRIGIDO
+            stake = c6.number_input("Valor da Aposta", min_value=0.0, step=10.0, format="%.2f", key="n_stake")
+            retorno = c7.number_input("Retorno Total", min_value=0.0, step=10.0, format="%.2f", key="n_retorno")
+            
+            with c8:
+                odd_calc = retorno/stake if stake > 0 else 0.0
+                st.metric("Odd Calculada", f"{odd_calc:.2f}")
+
+            st.button("💾 Registrar Aposta", type="primary", use_container_width=True, on_click=salvar_callback)
+
+        if st.session_state.get('msg_sucesso'):
+            st.success("✅ Aposta registrada!")
+            st.session_state['msg_sucesso'] = False
+        if st.session_state.get('msg_erro'):
+            st.error(f"❌ {st.session_state['msg_erro']}")
+            st.session_state['msg_erro'] = None
+
+    with col_help:
+        st.info("""
+        **Dicas Profissionais:**
+        
+        📌 **Competição:** Padronize os nomes (ex: use sempre 'Brasileirão A' em vez de 'BR A'). Isso ajuda nos gráficos.
+        
+        📌 **Stake:** Use stakes fixas ou percentuais da banca para melhor gestão.
+        
+        📌 **Odd:** O sistema calcula a odd automaticamente baseada no Retorno / Stake.
+        """)
+
+# --- ABA 2: DIÁRIO (Listagem e Edição) ---
+elif selected == "Diário de Apostas":
+    st.subheader("🗂️ Histórico de Entradas")
+    df = carregar_dados_usuario(usuario)
+    
+    if df.empty:
+        st.info("Nenhuma aposta registrada. Comece agora!")
+    else:
+        # Filtro Rápido
+        txt_busca = st.text_input("🔍 Buscar por time ou competição", placeholder="Ex: Flamengo")
+        if txt_busca:
+            df = df[df['Time/Evento'].str.contains(txt_busca, case=False) | df['Competicao'].str.contains(txt_busca, case=False)]
+
+        # MODO VISUALIZAÇÃO
+        if not st.session_state['edit_mode']:
+            # Cabeçalho da Lista
+            col_head1, col_head2, col_head3, col_head4 = st.columns([3, 2, 2, 2])
+            col_head1.markdown("**Evento / Competição**")
+            col_head2.markdown("**Mercado / Data**")
+            col_head3.markdown("**Stake / Odd**")
+            col_head4.markdown("**P/L / Status**")
+            st.divider()
+
+            for index, row in df.iterrows():
+                res = row['Resultado']
+                
+                # Definição de Cores
+                border_color = "#444"
+                status_color = "gray"
+                if "Green" in res: 
+                    border_color = "green"
+                    status_color = "#4CAF50"
+                elif "Red" in res: 
+                    border_color = "red"
+                    status_color = "#F44336"
+                elif "Reembolso" in res:
+                    border_color = "orange"
+                    status_color = "#FF9800"
+
+                with st.container():
+                    c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
+                    
+                    # Coluna 1: Evento
+                    c1.markdown(f"**{row['Time/Evento']}**")
+                    c1.caption(f"🏆 {row.get('Competicao', '-')}")
+                    
+                    # Coluna 2: Mercado
+                    c2.text(row['Mercado'])
+                    c2.caption(f"📅 {row['Data']}")
+                    
+                    # Coluna 3: Valores
+                    c3.markdown(f"💰 R$ {row['Stake']:.2f}")
+                    c3.caption(f"Odd: @{row['Odd']:.2f}")
+                    
+                    # Coluna 4: Lucro e Ações
+                    lucro_val = row['Lucro/Prejuizo']
+                    if lucro_val > 0: c4.markdown(f":green[**+R$ {lucro_val:.2f}**]")
+                    elif lucro_val < 0: c4.markdown(f":red[**R$ {lucro_val:.2f}**]")
+                    else: c4.markdown(f"**R$ {lucro_val:.2f}**")
+                    
+                    # Botões compactos
+                    ca, cb, cc, cd = c4.columns(4)
+                    if ca.button("✅", key=f"g_{index}", help="Green"):
+                        df.at[index, 'Resultado'] = "Green (Venceu)"
+                        df.at[index, 'Lucro/Prejuizo'] = float(row['Retorno_Potencial']) - float(row['Stake'])
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+                    if cb.button("❌", key=f"r_{index}", help="Red"):
+                        df.at[index, 'Resultado'] = "Red (Perdeu)"
+                        df.at[index, 'Lucro/Prejuizo'] = -float(row['Stake'])
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+                    if cc.button("✏️", key=f"ed_{index}", help="Editar"):
+                        st.session_state['edit_mode'] = True
+                        st.session_state['edit_index'] = index
+                        st.rerun()
+                    if cd.button("🗑️", key=f"dl_{index}", help="Excluir"):
+                        df = df.drop(index)
+                        atualizar_planilha_usuario(df, usuario)
+                        st.rerun()
+                    
+                    st.markdown(f"<div style='height:1px; background-color:{border_color}; margin-top:5px; margin-bottom:15px; opacity: 0.5'></div>", unsafe_allow_html=True)
+
+        # MODO EDIÇÃO
+        else:
+            idx = st.session_state['edit_index']
+            if idx not in df.index:
+                st.session_state['edit_mode'] = False
+                st.rerun()
+            
+            row = df.loc[idx]
+            st.markdown(f"### ✏️ Editando: {row['Time/Evento']}")
+            
+            with st.form("edit_form"):
+                try: d_padrao = pd.to_datetime(row['Data']).date()
+                except: d_padrao = date.today()
+
+                col1, col2 = st.columns(2)
+                n_data = col1.date_input("Data", d_padrao)
+                n_comp = col2.text_input("Competição", row.get('Competicao', ''))
+                
+                col3, col4 = st.columns(2)
+                n_evento = col3.text_input("Evento", row['Time/Evento'])
+                n_merc = col4.selectbox("Mercado", MERCADOS_FUTEBOL, index=MERCADOS_FUTEBOL.index(row['Mercado']) if row['Mercado'] in MERCADOS_FUTEBOL else 0)
+
+                col5, col6, col7 = st.columns(3)
+                n_stake = col5.number_input("Stake", value=float(row['Stake']))
+                n_ret = col6.number_input("Retorno Potencial", value=float(row['Retorno_Potencial']))
+                
+                l_res = ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"]
+                try: i_res = l_res.index(row['Resultado'])
+                except: i_res = 0
+                n_res = col7.selectbox("Resultado", l_res, index=i_res)
+
+                if st.form_submit_button("Atualizar Dados", type="primary"):
+                    lucro = 0.0
+                    if "Green" in n_res: lucro = n_ret - n_stake
+                    elif "Red" in n_res: lucro = -n_stake
+                    
+                    df.at[idx, 'Data'] = str(n_data)
+                    df.at[idx, 'Competicao'] = n_comp.upper()
+                    df.at[idx, 'Time/Evento'] = n_evento
+                    df.at[idx, 'Mercado'] = n_merc
+                    df.at[idx, 'Stake'] = n_stake
+                    df.at[idx, 'Retorno_Potencial'] = n_ret
+                    df.at[idx, 'Odd'] = round(n_ret/n_stake, 2) if n_stake > 0 else 0
+                    df.at[idx, 'Resultado'] = n_res
+                    df.at[idx, 'Lucro/Prejuizo'] = lucro
+                    
+                    atualizar_planilha_usuario(df, usuario)
+                    st.success("Atualizado!")
+                    st.session_state['edit_mode'] = False
+                    time.sleep(1)
+                    st.rerun()
+            
+            if st.button("Cancelar Edição"):
+                st.session_state['edit_mode'] = False
+                st.rerun()
+
+# --- ABA 3: DASHBOARD PRO ---
+elif selected == "Dashboard Pro":
+    st.session_state['edit_mode'] = False
+    
+    df = carregar_dados_usuario(usuario)
+    
+    if df.empty:
+        st.warning("Sem dados suficientes para gerar gráficos.")
+    else:
+        # --- FILTROS ---
+        st.markdown("### 📊 Performance Analytics")
+        with st.expander("🔎 Filtros Avançados", expanded=False):
+            f1, f2, f3 = st.columns(3)
+            d_inicio = f1.date_input("De", date.today() - timedelta(days=30))
+            d_fim = f2.date_input("Até", date.today())
+            
+            competicoes_un = ["Todas"] + list(df['Competicao'].unique())
+            f_comp = f3.selectbox("Competição", competicoes_un)
+            
+            # Aplicando filtros
+            mask = (df['Data'] >= d_inicio) & (df['Data'] <= d_fim)
+            df_filtered = df.loc[mask]
+            
+            if f_comp != "Todas":
+                df_filtered = df_filtered[df_filtered['Competicao'] == f_comp]
+        
+        if df_filtered.empty:
+            st.info("Nenhum dado encontrado com esses filtros.")
+        else:
+            # --- KPIs PRINCIPAIS ---
+            lucro_periodo = df_filtered["Lucro/Prejuizo"].sum()
+            turnover = df_filtered["Stake"].sum()
+            roi = (lucro_periodo / turnover * 100) if turnover > 0 else 0.0
+            total_bets = len(df_filtered)
+            
+            df_res = df_filtered[df_filtered['Resultado'].isin(["Green (Venceu)", "Red (Perdeu)"])]
+            greens = len(df_res[df_res['Resultado'] == "Green (Venceu)"])
+            winrate = (greens / len(df_res) * 100) if len(df_res) > 0 else 0.0
+            
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Lucro Líquido", f"R$ {lucro_periodo:.2f}", delta=f"{roi:.2f}% ROI")
+            k2.metric("Turnover (Volume)", f"R$ {turnover:.2f}")
+            k3.metric("Winrate", f"{winrate:.1f}%", f"{greens} Wins")
+            k4.metric("Total Entradas", f"{total_bets}")
+            
+            st.divider()
+
+            # --- GRÁFICO 1: EVOLUÇÃO DA BANCA ---
+            # Ordena por data crescente para acumular
+            df_chart = df_filtered.sort_values(by="Data", ascending=True).copy()
+            df_chart['Acumulado'] = df_chart['Lucro/Prejuizo'].cumsum()
+            
+            # Adiciona ponto zero (Opcional, mas bom para visualizar)
+            
+            fig_evolucao = px.area(
+                df_chart, x='Data', y='Acumulado', 
+                title="📈 Crescimento da Banca (Acumulado)",
+                markers=True,
+                color_discrete_sequence=['#00CC96']
+            )
+            fig_evolucao.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="white")
+            fig_evolucao.add_hline(y=0, line_dash="dash", line_color="white")
+            st.plotly_chart(fig_evolucao, use_container_width=True)
+            
+            # --- GRÁFICO 2 e 3: ANÁLISE POR SEGMENTO ---
+            c_chart1, c_chart2 = st.columns(2)
+            
+            with c_chart1:
+                # Lucro por Mercado
+                df_mercado = df_filtered.groupby("Mercado")["Lucro/Prejuizo"].sum().reset_index()
+                df_mercado = df_mercado.sort_values("Lucro/Prejuizo", ascending=False)
+                
+                fig_merc = px.bar(
+                    df_mercado, x="Lucro/Prejuizo", y="Mercado", orientation='h',
+                    title="Lucro por Mercado",
+                    color="Lucro/Prejuizo",
+                    color_continuous_scale=["red", "yellow", "green"]
+                )
+                fig_merc.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="white")
+                st.plotly_chart(fig_merc, use_container_width=True)
+                
+            with c_chart2:
+                # Lucro por Competição (Top 10)
+                if 'Competicao' in df_filtered.columns:
+                    df_comp = df_filtered.groupby("Competicao")["Lucro/Prejuizo"].sum().reset_index()
+                    df_comp = df_comp.sort_values("Lucro/Prejuizo", ascending=False).head(10)
+                    
+                    fig_comp = px.bar(
+                        df_comp, x="Competicao", y="Lucro/Prejuizo",
+                        title="Top Performance por Liga",
+                        color="Lucro/Prejuizo",
+                         color_continuous_scale=["red", "yellow", "green"]
+                    )
+                    fig_comp.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="white")
+                    st.plotly_chart(fig_comp, use_container_width=True)
+
+            # --- GRÁFICO 4: GESTÃO DE RISCO (Scatter) ---
+            st.subheader("🎯 Gestão de Risco (Odd vs Stake)")
+            df_risk = df_filtered[df_filtered['Stake'] > 0]
+            if not df_risk.empty:
+                fig_risk = px.scatter(
+                    df_risk, x="Odd", y="Stake", color="Resultado",
+                    size="Stake", hover_data=["Time/Evento"],
+                    color_discrete_map={"Green (Venceu)": "green", "Red (Perdeu)": "red", "Reembolso": "orange", "Pendente": "gray"},
+                    title="Dispersão: Onde estão seus Greens e Reds?"
+                )
+                fig_risk.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="white")
+                st.plotly_chart(fig_risk, use_container_width=True)
