@@ -11,7 +11,7 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (MODO ESCURO + BOTÕES LADO A LADO NO MOBILE) ---
+# --- CSS VISUAL (CORREÇÃO: FORÇAR LINHA ÚNICA NO MOBILE) ---
 st.markdown("""
 <style>
     /* === 1. FORÇA O TEMA ESCURO === */
@@ -33,7 +33,7 @@ st.markdown("""
         padding-bottom: 5rem;
     }
     
-    /* === 2. ESTILO DOS CARDS (Métricas) === */
+    /* === 2. ESTILO DOS CARDS DE MÉTRICAS === */
     div[data-testid="stMetric"] {
         background-color: transparent !important;
         border: 1px solid #444444 !important;
@@ -43,35 +43,37 @@ st.markdown("""
     div[data-testid="stMetric"] label { color: #a0a0a0 !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #ffffff !important; }
 
-    /* === 3. CORREÇÃO: BOTÕES LADO A LADO NO CELULAR === */
-    
-    /* Regra Geral: Impede que colunas tenham largura mínima grande */
-    div[data-testid="column"] {
-        width: auto !important;
-        flex: 1 1 auto !important;
-        min-width: 1px !important;
-    }
-
-    /* ESTILO RESPONSIVO (Só para celular) */
+    /* === 3. CORREÇÃO "NUCLEAR" PARA BOTÕES LADO A LADO NO MOBILE === */
     @media (max-width: 640px) {
-        .nav-link { font-size: 12px !important; padding: 8px 6px !important; margin: 0px !important; }
-        .bi { font-size: 14px !important; margin-right: 2px !important; }
-        div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
-        
-        /* O SEGREDO: Reduz padding das colunas para caber 5 na tela */
-        div[data-testid="column"] {
-            padding: 0 1px !important; 
+        /* APLICA-SE AOS GRUPOS DE COLUNAS */
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important; /* Força direção horizontal */
+            flex-wrap: nowrap !important;   /* Proíbe quebra de linha */
+            gap: 2px !important;            /* Espaço mínimo entre colunas */
         }
 
-        /* Espreme o botão para caber */
-        div.stButton > button {
-            padding: 0px !important; /* Sem enchimento interno */
-            margin: 0px !important;  /* Sem margem externa */
-            width: 100% !important;  /* Ocupa 100% da coluninha */
-            min-height: 35px !important;
-            font-size: 14px !important;
-            line-height: 1 !important;
+        /* APLICA-SE A CADA COLUNA INDIVIDUAL */
+        div[data-testid="column"] {
+            flex: 1 1 auto !important;      /* Cresce e encolhe igual */
+            width: auto !important;
+            min-width: 0px !important;      /* Permite ficar bem pequeno */
+            padding: 0 !important;          /* Remove enchimento extra */
         }
+
+        /* ESTILO DOS BOTÕES PARA CABEREM NA TELA */
+        div.stButton > button {
+            padding: 0px !important;        /* Remove padding interno */
+            margin: 0px !important;
+            height: 35px !important;        /* Altura fixa */
+            min-height: 35px !important;
+            width: 100% !important;         /* Ocupa a largura da coluninha */
+            font-size: 16px !important;     /* Tamanho do ícone */
+            line-height: 1 !important;
+            border-radius: 4px !important;
+        }
+        
+        /* Ajuste do menu superior para não quebrar também */
+        .nav-link { font-size: 11px !important; padding: 5px !important; margin: 0 !important; }
     }
     
     /* Ajuste fino para os cards de aposta */
@@ -134,6 +136,7 @@ def carregar_apostas(usuario_ativo):
             rows = dados_brutos[1:]
             df = pd.DataFrame(rows, columns=header)
             
+            # Limpeza e Conversão
             cols_num = ['Odd', 'Stake', 'Retorno_Potencial', 'Lucro/Prejuizo']
             for col in cols_num:
                 if col in df.columns:
@@ -274,7 +277,7 @@ if selected == "Novo":
                 st.rerun()
         else: st.error("Verifique os dados")
 
-# --- ABA 2: APOSTAS (LISTA COM BOTÕES LADO A LADO) ---
+# --- ABA 2: APOSTAS (LISTA COM BOTÕES NA MESMA LINHA) ---
 elif selected == "Apostas":
     st.subheader("🗂️ Histórico")
     df = carregar_apostas(usuario)
@@ -308,8 +311,7 @@ elif selected == "Apostas":
                     st.markdown("---") 
 
                     # BOTÕES LADO A LADO (FORÇADOS PELO CSS)
-                    # Usamos gap="small" para aproximar
-                    cols = st.columns([1, 1, 1, 1, 1], gap="small")
+                    cols = st.columns([1, 1, 1, 1, 1]) # Removi gap para o CSS controlar
                     
                     if cols[0].button("✅", key=f"g_{index}"):
                         df.at[index, 'Resultado'] = "Green (Venceu)"
