@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+import plotly.express as px
+import plotly.graph_objects as go
 
 # --- Configuração da Página ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
@@ -70,7 +72,6 @@ def limpar_numero(valor):
     if isinstance(valor, (int, float)):
         return valor
     try:
-        # Troca vírgula por ponto e remove caracteres não numéricos exceto ponto
         return float(str(valor).replace(',', '.'))
     except:
         return 0.0
@@ -143,7 +144,7 @@ def carregar_tips():
         dados = sheet.get_all_records()
         df = pd.DataFrame(dados)
         
-        # Pré-processamento dos dados (Garante que Odd e Unidades sejam números)
+        # Pré-processamento dos dados
         if not df.empty:
             df['Odd_Num'] = df['Odd'].apply(limpar_numero)
             df['Unid_Num'] = df['Unidades'].apply(limpar_numero)
@@ -188,10 +189,6 @@ def main():
     winrate = (greens / total_resolvidas * 100) if total_resolvidas > 0 else 0
     lucro_total = df_res['Lucro'].sum()
     
-    # Formatação de cor do lucro
-    delta_color = "normal"
-    if lucro_total > 0: delta_color = "off" # Verde no st.metric padrão se usar delta, mas vamos forçar visualmente
-
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Winrate", f"{winrate:.0f}%")
     c2.metric("Greens", f"{greens}")
@@ -204,7 +201,6 @@ def main():
     aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico e Gráficos"])
 
     # Separa os DataFrames
-    # Consideramos "Pendente" ou qualquer coisa que não seja Green/Red/Anulada
     df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
     df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
 
@@ -214,39 +210,66 @@ def main():
         if df_pendentes.empty:
             st.info("Nenhuma entrada pendente no momento.")
         else:
-            # Ordena pendentes (opcional: mais recentes primeiro)
             df_pendentes = df_pendentes.iloc[::-1]
             for i, row in df_pendentes.iterrows():
                 exibir_card(row)
 
     # --- ABA 2: HISTÓRICO ---
     with aba_historico:
-        # Gráfico de Evolução (Só aparece se tiver dados resolvidos)
+        # Gráfico Plotly
         if not df_res.empty:
-            st.markdown("##### 📈 Evolução da Banca")
+            st.markdown("##### 📈 Evolução da Banca (Lucro Acumulado)")
             
-            # Prepara dados para o gráfico
+            # Preparação dos Dados para o Gráfico
             df_chart = df_res.copy()
-            # Tenta converter data, se falhar, usa o índice original como ordem cronológica
+            
+            # Tenta converter Data para formato datetime
             try:
-                # Ajuste o formato da data conforme sua planilha (ex: %d/%m/%Y)
-                # Se der erro, ele segue sem ordenar por data, usando a ordem de inserção
                 df_chart['Data_Dt'] = pd.to_datetime(df_chart['Data'], dayfirst=True, errors='coerce')
-                df_chart = df_chart.sort_values(by='Data_Dt')
             except:
-                pass 
+                df_chart['Data_Dt'] = df_chart['Data']
+
+            # Remove datas inválidas (NaT) se a conversão falhou em algumas linhas
+            df_chart = df_chart.dropna(subset=['Data_Dt'])
+
+            # Agrupamento por Dia (Soma o lucro de todas as tips do mesmo dia)
+            df_diario = df_chart.groupby('Data_Dt')['Lucro'].sum().reset_index()
+            df_diario = df_diario.sort_values('Data_Dt')
             
-            df_chart['Acumulado'] = df_chart['Lucro'].cumsum()
+            # Cria o acumulado
+            df_diario['Acumulado'] = df_diario['Lucro'].cumsum()
+
+            # Criação do Gráfico
+            fig = px.line(
+                df_diario, 
+                x='Data_Dt', 
+                y='Acumulado', 
+                markers=True,
+                title=None
+            )
             
-            # Renderiza gráfico de área
-            st.area_chart(df_chart.reset_index(), y='Acumulado', color='#00e676')
+            # Estilização
+            fig.update_traces(line_color='#00e676', line_width=3, marker_size=8)
+            fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
+
+            fig.update_layout(
+                xaxis_title=None, # Remove rótulo X para limpar
+                yaxis_title="Unidades (U)",
+                template="plotly_dark",
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                hovermode="x unified",
+                margin=dict(l=0, r=0, t=10, b=0),
+                height=350
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
             st.divider()
 
         st.markdown("##### Últimos Resultados")
         if df_historico.empty:
             st.info("Nenhum histórico disponível com os filtros atuais.")
         else:
-            # Mostra do mais recente para o mais antigo
             df_historico = df_historico.iloc[::-1]
             for i, row in df_historico.iterrows():
                 exibir_card(row)
