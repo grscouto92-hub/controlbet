@@ -46,11 +46,28 @@ st.markdown("""
         border: 1px solid #383838;
         color: #ffffff !important;
     }
+    
+    /* Destaques dentro da aposta */
     .tip-odd {
         color: #00e676 !important;
         font-weight: bold;
         font-size: 1.1rem;
     }
+    
+    /* Badge de Confiança (Novo) */
+    .tip-confidence {
+        font-size: 0.75rem;
+        color: #ffd700; /* Dourado */
+        background-color: #333333;
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-right: 10px; /* Espaço entre a confiança e a odd */
+        font-weight: bold;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #555;
+    }
+
     .tip-analysis { color: #dddddd !important; }
     .tip-footer { color: #dddddd !important; }
 
@@ -93,6 +110,9 @@ def exibir_card(row):
     """Gera o HTML do card para uma linha específica"""
     status = str(row['Status']).strip().title()
     
+    # Tenta pegar a confiança (se a coluna não existir, retorna vazio)
+    confianca = str(row.get('Confiança', '')).strip()
+    
     css_class = "status-pending"
     icone = "⏳ Pendente"
     
@@ -105,6 +125,11 @@ def exibir_card(row):
     elif status == "Anulada":
         icone = "🔄 Anulada"
 
+    # HTML da Confiança (Só aparece se tiver texto)
+    html_confianca = ""
+    if confianca:
+        html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>'
+
     html_card = f"""
     <div class="tip-card {css_class}">
         <div class="tip-header">
@@ -115,8 +140,13 @@ def exibir_card(row):
             {row['Jogo']}
         </div>
         <div class="tip-bet">
-            <span>{row['Aposta']}</span>
-            <span class="tip-odd">@{row['Odd']}</span>
+            <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 500;">{row['Aposta']}</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                {html_confianca}
+                <span class="tip-odd">@{row['Odd']}</span>
+            </div>
         </div>
         <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
             💡 <i>"{row['Analise']}"</i>
@@ -253,7 +283,7 @@ def main():
             fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
 
             fig.update_layout(
-                xaxis_title=None, # Remove rótulo X para limpar
+                xaxis_title=None, 
                 yaxis_title="Unidades (U)",
                 template="plotly_dark",
                 plot_bgcolor='rgba(0,0,0,0)',
