@@ -22,7 +22,7 @@ st.markdown("""
         border-left: 5px solid #ff4b4b;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         color: #ffffff !important;
-        position: relative; /* Para posicionamentos absolutos se precisar */
+        position: relative;
     }
     
     /* Estilo para Cards Bloqueados (Blur) */
@@ -31,15 +31,15 @@ st.markdown("""
         border-radius: 12px;
         padding: 15px;
         margin-bottom: 15px;
-        border-left: 5px solid #555; /* Cinza para indicar bloqueado */
+        border-left: 5px solid #555; /* Cinza */
         position: relative;
-        overflow: hidden;
+        /* overflow: hidden; <--- REMOVIDO PARA EVITAR BUGS NO MOBILE */
     }
     
     .blur-content {
         filter: blur(5px);
         opacity: 0.4;
-        pointer-events: none; /* Impede selecionar o texto borrado */
+        pointer-events: none; /* Impede clicar no texto borrado */
         user-select: none;
     }
 
@@ -56,25 +56,27 @@ st.markdown("""
         align-items: center;
         z-index: 10;
         background: rgba(0, 0, 0, 0.2); /* Fundo levemente escurecido */
+        border-radius: 12px; /* Acompanha a borda do card */
     }
 
     .btn-telegram {
-        background-color: #0088cc; /* Cor do Telegram */
+        background-color: #0088cc; /* Azul Telegram */
         color: white !important;
-        padding: 10px 20px;
-        border-radius: 25px;
+        padding: 12px 24px;
+        border-radius: 50px;
         text-decoration: none;
         font-weight: bold;
-        box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
+        box-shadow: 0 4px 15px rgba(0, 136, 204, 0.5);
         transition: transform 0.2s;
-        border: 1px solid rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        font-size: 0.9rem;
     }
     .btn-telegram:hover {
         transform: scale(1.05);
         background-color: #0099e6;
     }
 
-    /* Classes auxiliares já existentes */
+    /* Classes auxiliares */
     .tip-header { display: flex; justify-content: space-between; color: #aaaaaa; font-size: 0.8rem; margin-bottom: 8px; }
     .tip-match { font-size: 1.1rem; font-weight: bold; color: #ffffff !important; margin-bottom: 10px; }
     .tip-bet { background-color: #2b2b2b; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #383838; color: #ffffff !important; }
@@ -148,28 +150,27 @@ def exibir_card(row):
     """
     st.markdown(html_card, unsafe_allow_html=True)
 
-# --- FUNÇÃO 2: Exibe Card Bloqueado (Censurado) ---
+# --- FUNÇÃO 2: Exibe Card Bloqueado (CORRIGIDA) ---
 def exibir_card_bloqueado(row):
-    # Link do seu grupo do telegram (Pode vir de uma variavel)
     link_telegram = "https://t.me/SEU_LINK_AQUI"
     
-    html_locked = f"""
-    <div class="tip-card-locked">
-        <div class="blur-content">
-            <div class="tip-header">
-                <span>⚽ {row['Liga']}</span>
-                <span>{row['Data']} • {row['Hora']}</span>
-            </div>
-            <div class="tip-match">{row['Jogo']}</div>
-            <div class="tip-bet">
-                <span>Aposta Secreta VIP</span>
-                <span class="tip-odd">@1.90</span>
-            </div>
-            <div class="tip-analysis" style="margin-top: 12px;">
-                💡 Análise exclusiva para membros do grupo gratuito...
-            </div>
+    # Separando as strings para evitar erro de indentação/renderização
+    conteudo_borrado = f"""
+        <div class="tip-header">
+            <span>⚽ {row['Liga']}</span>
+            <span>{row['Data']} • {row['Hora']}</span>
         </div>
-
+        <div class="tip-match">{row['Jogo']}</div>
+        <div class="tip-bet">
+            <span>Aposta Secreta VIP</span>
+            <span class="tip-odd">@1.90</span>
+        </div>
+        <div class="tip-analysis" style="margin-top: 12px;">
+            💡 Análise exclusiva para membros do grupo gratuito...
+        </div>
+    """
+    
+    overlay_botao = f"""
         <div class="unlock-overlay">
             <div style="font-size: 2rem; margin-bottom: 10px;">🔒</div>
             <a href="{link_telegram}" target="_blank" class="btn-telegram">
@@ -179,6 +180,15 @@ def exibir_card_bloqueado(row):
                 Toque para desbloquear
             </div>
         </div>
+    """
+
+    # Montagem final garantida
+    html_locked = f"""
+    <div class="tip-card-locked">
+        <div class="blur-content">
+            {conteudo_borrado}
+        </div>
+        {overlay_botao}
     </div>
     """
     st.markdown(html_locked, unsafe_allow_html=True)
@@ -215,126 +225,3 @@ def main():
         st.caption("Análises profissionais de Futebol")
 
     df = carregar_tips()
-    if df.empty:
-        st.warning("Não foi possível carregar os dados.")
-        return
-
-    # Sidebar
-    with st.sidebar:
-        st.markdown("""<a href="https://t.me/seulink" target="_blank" class="cta-button">🚀 GRUPO VIP (Entrar)</a>""", unsafe_allow_html=True)
-        st.divider()
-        st.header("🔍 Filtros")
-        busca_time = st.text_input("Buscar Time ou Jogo", placeholder="Ex: Flamengo")
-        filtro_liga = st.multiselect("Filtrar por Liga", df['Liga'].unique().tolist())
-        
-        if filtro_liga: df = df[df['Liga'].isin(filtro_liga)]
-        if busca_time: df = df[df['Jogo'].str.contains(busca_time, case=False, na=False)]
-
-    # Estatísticas
-    df_res = df[df['Status'].isin(['Green', 'Red'])]
-    greens = len(df_res[df_res['Status'] == 'Green'])
-    total = len(df_res)
-    winrate = (greens / total * 100) if total > 0 else 0
-    lucro = df_res['Lucro'].sum()
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Winrate", f"{winrate:.0f}%")
-    c2.metric("Greens", f"{greens}")
-    c3.metric("Finalizadas", f"{total}")
-    c4.metric("Lucro (U)", f"{lucro:+.2f}")
-
-    st.divider()
-
-    aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico e Gráficos"])
-    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
-    df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
-
-    # --- LÓGICA DO BLOQUEIO AQUI ---
-    with aba_jogos:
-        st.markdown("##### Próximas Entradas")
-        
-        if df_pendentes.empty:
-            st.info("Nenhuma entrada pendente.")
-        else:
-            # Ordena: Mais recentes no topo
-            df_pendentes = df_pendentes.iloc[::-1]
-            
-            # Converte para lista para poder usar index
-            # Vamos iterar com 'enumerate'
-            qtde_exibida = 0
-            
-            for i, (index, row) in enumerate(df_pendentes.iterrows()):
-                # Se o usuário usou Filtro de Busca, mostra tudo o que ele buscou
-                # Se NÃO tem filtro, aplica a regra de bloquear
-                
-                esta_filtrando = (filtro_liga or busca_time)
-                
-                if esta_filtrando:
-                    # Se está filtrando, mostra tudo (para o usuário achar o que quer)
-                    exibir_card(row)
-                else:
-                    # Regra Padrão: A 1ª é grátis, o resto é bloqueado
-                    if i == 0:
-                        st.markdown("**🏆 Tip do Dia (Liberada):**")
-                        exibir_card(row)
-                    else:
-                        if i == 1: st.markdown("---") # Separador visual
-                        exibir_card_bloqueado(row)
-
-    # --- ABA 2: HISTÓRICO (Mantive igual) ---
-    with aba_historico:
-        if not df_res.empty:
-            try: df_res['Data_Dt'] = pd.to_datetime(df_res['Data'], dayfirst=True, errors='coerce')
-            except: df_res['Data_Dt'] = pd.NaT
-            df_chart = df_res.dropna(subset=['Data_Dt']).copy()
-            
-            st.markdown("##### 📈 Evolução da Banca")
-            df_diario = df_chart.groupby('Data_Dt')['Lucro'].sum().reset_index().sort_values('Data_Dt')
-            df_diario['Acumulado'] = df_diario['Lucro'].cumsum()
-            fig_line = px.line(df_diario, x='Data_Dt', y='Acumulado', markers=True)
-            fig_line.update_traces(line_color='#00e676', line_width=3)
-            fig_line.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.5)
-            fig_line.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=300)
-            st.plotly_chart(fig_line, use_container_width=True)
-
-            st.markdown("##### 📅 Resultado Mensal")
-            df_chart['Mes_Ano'] = df_chart['Data_Dt'].dt.strftime('%m/%Y')
-            df_chart['Ano_Mes_Sort'] = df_chart['Data_Dt'].dt.strftime('%Y-%m')
-            df_mensal = df_chart.groupby(['Ano_Mes_Sort', 'Mes_Ano'])['Lucro'].sum().reset_index().sort_values('Ano_Mes_Sort')
-            colors = ['#00e676' if x >= 0 else '#ff1744' for x in df_mensal['Lucro']]
-            fig_bar = px.bar(df_mensal, x='Mes_Ano', y='Lucro', text_auto='.2f')
-            fig_bar.update_traces(marker_color=colors, textfont_size=12, textposition="outside")
-            fig_bar.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=300, xaxis_title=None, yaxis_title="Lucro (U)")
-            st.plotly_chart(fig_bar, use_container_width=True)
-            st.divider()
-
-        st.markdown("##### Últimos Resultados")
-        if df_historico.empty:
-            st.info("Nenhum histórico disponível.")
-        else:
-            df_historico = df_historico.iloc[::-1]
-            ITENS_POR_PAGINA = 10
-            total_paginas = max(1, (len(df_historico) - 1) // ITENS_POR_PAGINA + 1)
-            if st.session_state.pagina_atual >= total_paginas: st.session_state.pagina_atual = total_paginas - 1
-            if st.session_state.pagina_atual < 0: st.session_state.pagina_atual = 0
-            inicio = st.session_state.pagina_atual * ITENS_POR_PAGINA
-            df_pagina = df_historico.iloc[inicio:inicio + ITENS_POR_PAGINA]
-            for i, row in df_pagina.iterrows(): exibir_card(row)
-            if total_paginas > 1:
-                st.markdown("---")
-                c_prev, c_info, c_next = st.columns([1, 2, 1])
-                with c_prev: 
-                    if st.button("⬅️ Anterior", disabled=(st.session_state.pagina_atual == 0)): 
-                        st.session_state.pagina_atual -= 1
-                        st.rerun()
-                with c_info: st.markdown(f"<div style='text-align:center'>Página {st.session_state.pagina_atual + 1}/{total_paginas}</div>", unsafe_allow_html=True)
-                with c_next: 
-                    if st.button("Próxima ➡️", disabled=(st.session_state.pagina_atual == total_paginas - 1)): 
-                        st.session_state.pagina_atual += 1
-                        st.rerun()
-
-    st.markdown("---")
-    st.markdown("<div style='text-align: center; color: #666; font-size: 12px;'>⚠️ Aposte com responsabilidade. +18.</div>", unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
