@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import date
+# from datetime import date # Não está sendo usado, pode remover
 
 # --- Configuração Simples ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
 
-# --- CSS para Estilo "Card" (Cartão de Aposta) ---
+# --- CSS para Estilo "Card" (CORRIGIDO) ---
 st.markdown("""
 <style>
     /* Remover padding excessivo */
@@ -19,37 +19,44 @@ st.markdown("""
         border-radius: 12px;
         padding: 15px;
         margin-bottom: 15px;
-        border-left: 5px solid #ff4b4b; /* Cor padrão */
+        border-left: 5px solid #ff4b4b;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        color: #ffffff !important; /* <--- FORÇA O TEXTO BRANCO GERAL */
     }
     .tip-header {
         display: flex;
         justify-content: space-between;
-        color: #888;
+        color: #aaaaaa; /* Cor cinza claro para o cabeçalho */
         font-size: 0.8rem;
         margin-bottom: 8px;
     }
     .tip-match {
         font-size: 1.1rem;
         font-weight: bold;
-        color: white;
-        margin-bottom: 5px;
+        color: #ffffff !important; /* <--- FORÇA O TÍTULO BRANCO */
+        margin-bottom: 10px;
     }
     .tip-bet {
-        background-color: #2b2b2b;
-        padding: 8px;
-        border-radius: 6px;
+        background-color: #2b2b2b; /* Fundo um pouco mais claro para contraste */
+        padding: 10px;
+        border-radius: 8px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border: 1px solid #333;
+        border: 1px solid #383838;
+        color: #ffffff !important; /* <--- FORÇA O TEXTO DA APOSTA BRANCO */
     }
     .tip-odd {
-        color: #00e676; /* Verde Neon */
+        color: #00e676 !important; /* Verde Neon para a Odd */
         font-weight: bold;
-        font-size: 1rem;
+        font-size: 1.1rem;
     }
     
+    /* Texto da Análise e Rodapé do Card */
+    .tip-analysis, .tip-footer {
+        color: #dddddd !important; /* Texto quase branco */
+    }
+
     /* Status Colors */
     .status-green { border-left-color: #00e676 !important; }
     .status-red { border-left-color: #ff1744 !important; }
@@ -84,7 +91,7 @@ def main():
     # 1. Cabeçalho (Sua Marca)
     col_logo, col_title = st.columns([1, 4])
     with col_logo:
-        st.markdown("# 🦁") # Pode trocar por st.image("logo.png")
+        st.markdown("# 🦁")
     with col_title:
         st.markdown("### GuiTips")
         st.caption("Análises profissionais de Futebol")
@@ -92,7 +99,6 @@ def main():
     st.divider()
 
     # 2. Estatísticas Rápidas (Banner)
-    # Você pode calcular isso automático da planilha ou fixar aqui
     df = carregar_tips()
     
     if not df.empty:
@@ -114,8 +120,7 @@ def main():
     if df.empty:
         st.info("Aguardando novas entradas...")
     else:
-        # Ordena: Pendentes primeiro, depois pela data/hora
-        # Para simplificar, vamos apenas inverter para mostrar as últimas adicionadas primeiro
+        # Ordena: Mostra as últimas adicionadas primeiro
         df = df.iloc[::-1]
 
         for i, row in df.iterrows():
@@ -131,7 +136,7 @@ def main():
                 css_class = "status-red"
                 icone = "❌ Red"
 
-            # HTML do Card
+            # HTML do Card (COM NOVAS CLASSES DE COR)
             html_card = f"""
             <div class="tip-card {css_class}">
                 <div class="tip-header">
@@ -145,10 +150,10 @@ def main():
                     <span>{row['Aposta']}</span>
                     <span class="tip-odd">@{row['Odd']}</span>
                 </div>
-                <div style="margin-top: 10px; font-size: 0.85rem; color: #ccc;">
+                <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
                     💡 <i>"{row['Analise']}"</i>
                 </div>
-                <div style="margin-top: 8px; font-size: 0.8rem; text-align: right; font-weight: bold;">
+                <div class="tip-footer" style="margin-top: 10px; font-size: 0.85rem; text-align: right; font-weight: bold;">
                     {icone} | Unidades: {row['Unidades']}
                 </div>
             </div>
@@ -166,4 +171,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
