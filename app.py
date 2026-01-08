@@ -11,43 +11,31 @@ from streamlit_option_menu import option_menu
 # --- Configuração da Página ---
 st.set_page_config(page_title="ControlBET", layout="wide", page_icon="⚽")
 
-# --- CSS VISUAL (FUNDO PADRONIZADO E CARDS TRANSPARENTES) ---
+# --- CSS VISUAL (MODO ESCURO + CARDS TRANSPARENTES) ---
 st.markdown("""
 <style>
-    /* === FUNDO GERAL === */
-    .stApp {
-        background-color: #f0f2f6 !important;
-    }
-    
-    section[data-testid="stSidebar"] {
-        background-color: #e8eaf0 !important;
-        border-right: 1px solid #d0d0d0;
-    }
-
+    /* Espaçamento do Topo */
     .block-container {
         padding-top: 3.5rem;
         padding-bottom: 5rem;
     }
     
-    /* === CORREÇÃO DOS CARDS (ODD / DASHBOARD) === */
-    /* Agora eles ficam IGUAIS aos cards de aposta: Transparentes com borda cinza */
+    /* === ESTILO DOS CARDS DE MÉTRICAS (ODD, LUCRO, ROI) === */
+    /* Agora eles imitam o st.container: fundo transparente e borda sutil */
     div[data-testid="stMetric"] {
-        background-color: transparent !important; /* Fundo transparente (pega a cor do site) */
-        border: 1px solid #d0d0d0 !important;    /* Borda Cinza igual aos outros */
+        background-color: transparent !important; /* Fundo do site (Escuro) */
+        border: 1px solid #444444 !important;    /* Borda Cinza Escura (Visível no Dark) */
         padding: 10px !important;
         border-radius: 8px !important;
-        box-shadow: none !important;              /* Sem sombra para ficar "Flat" */
+        color: white !important;                 /* Texto Branco */
     }
 
-    /* Força Texto PRETO (Para não sumir no fundo cinza claro) */
+    /* Garante que os valores dentro do card sejam legíveis no modo escuro */
     div[data-testid="stMetric"] label {
-        color: #000000 !important;
+        color: #e0e0e0 !important; /* Título cinza claro */
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #000000 !important;
-    }
-    div[data-testid="stMetric"] p {
-        color: #333333 !important;
+        color: #ffffff !important; /* Valor branco brilhante */
     }
 
     /* === RESPONSIVO CELULAR === */
@@ -57,9 +45,9 @@ st.markdown("""
         div[data-testid="stVerticalBlock"] > div { width: 100% !important; }
     }
     
-    /* Ajuste visual dos Cards de Aposta (Container nativo) para garantir borda igual */
+    /* Ajuste fino para os cards de aposta (feed) ficarem harmônicos */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: #d0d0d0 !important;
+        border-color: #444444 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -200,286 +188,3 @@ if not st.session_state['logado']:
                 if nu and np:
                     ok, msg = criar_novo_usuario(nu, np)
                     if ok: st.success(msg)
-                    else: st.error(msg)
-    st.stop()
-
-# =========================================================
-# APP LOGADO
-# =========================================================
-usuario = st.session_state['usuario_atual']
-
-with st.sidebar:
-    st.markdown(f"**Trader:** {usuario}")
-    if st.button("Sair"):
-        st.session_state['logado'] = False
-        st.rerun()
-
-selected = option_menu(
-    menu_title=None,
-    options=["Novo", "Apostas", "Dash"], 
-    icons=["plus-circle", "list-check", "graph-up-arrow"], 
-    default_index=0,
-    orientation="horizontal",
-    styles={
-        "container": {"padding": "0!important", "background-color": "transparent"},
-        "icon": {"font-size": "16px"}, 
-        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px 2px", "--hover-color": "#cccccc"},
-        "nav-link-selected": {"background-color": "#ff4b4b"},
-    }
-)
-
-# --- ABA 1: NOVO ---
-if selected == "Novo":
-    st.session_state['edit_mode'] = False
-    st.subheader("📝 Registrar")
-    c1, c2 = st.columns([1, 2])
-    with c1: data_aposta = st.date_input("Data", date.today())
-    with c2: evento = st.text_input("Evento")
-    mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL)
-    c3, c4, c5 = st.columns(3)
-    with c3: stake = st.number_input("Stake", min_value=0.0, step=10.0)
-    with c4: retorno = st.number_input("Retorno", min_value=0.0, step=10.0)
-    with c5:
-        if stake > 0 and retorno > 0: st.metric("Odd", f"{retorno/stake:.2f}")
-        else: st.write("Odd: 0.00")
-    resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"])
-    
-    if st.button("💾 Salvar", type="primary", use_container_width=True):
-        if stake > 0 and retorno >= stake and evento:
-            lucro = 0.0
-            if "Green" in resultado: lucro = retorno - stake
-            elif "Red" in resultado: lucro = -stake
-            
-            nova = {
-                "Usuario": usuario, "Data": str(data_aposta), "Esporte": "Futebol",
-                "Time/Evento": evento, "Mercado": mercado, "Odd": round(retorno/stake, 2),
-                "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
-            }
-            if salvar_aposta(nova):
-                st.success("Sucesso!")
-                time.sleep(1)
-                st.rerun()
-        else: st.error("Verifique os dados")
-
-# --- ABA 2: APOSTAS ---
-elif selected == "Apostas":
-    st.subheader("🗂️ Histórico")
-    df = carregar_apostas(usuario)
-    
-    if df.empty: st.info("Sem apostas.")
-    else:
-        # LISTA
-        if not st.session_state['edit_mode']:
-            st.caption("Feed de Apostas")
-            try: df = df.sort_values(by='Data', ascending=False)
-            except: pass
-            
-            for index, row in df.iterrows():
-                res = row['Resultado']
-                cor, icone = "gray", "⏳"
-                if "Green" in res: cor, icone = "green", "✅"
-                elif "Red" in res: cor, icone = "red", "❌"
-                elif "Reembolso" in res: cor, icone = "orange", "🔄"
-
-                with st.container(border=True):
-                    c1, c2 = st.columns([5, 1])
-                    with c1:
-                        st.markdown(f"**{row['Time/Evento']}**")
-                        st.markdown(f"<small>{row['Data']} | {row['Mercado']}</small>", unsafe_allow_html=True)
-                        if "Green" in res: st.markdown(f":green[**+ R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
-                        elif "Red" in res: st.markdown(f":red[**R$ {row['Lucro/Prejuizo']:.2f}**] {icone}")
-                        else: st.markdown(f"**{res}** {icone}")
-                    with c2:
-                        st.write("")
-                        if st.button("✏️", key=f"e_{index}"):
-                            st.session_state['edit_mode'] = True
-                            st.session_state['edit_index'] = index
-                            st.rerun()
-        # EDIÇÃO
-        else:
-            idx = st.session_state['edit_index']
-            if idx not in df.index:
-                st.session_state['edit_mode'] = False
-                st.rerun()
-            
-            row = df.loc[idx]
-            st.markdown(f"**Editando:** {row['Time/Evento']}")
-            with st.container(border=True):
-                try: d_padrao = row['Data']
-                except: d_padrao = date.today()
-                
-                c1, c2 = st.columns([1,2])
-                n_data = c1.date_input("Data", d_padrao)
-                n_evento = c2.text_input("Evento", row['Time/Evento'])
-                
-                try: i_merc = MERCADOS_FUTEBOL.index(row['Mercado'])
-                except: i_merc = 0
-                n_merc = st.selectbox("Mercado", MERCADOS_FUTEBOL, index=i_merc)
-                
-                c3, c4 = st.columns(2)
-                n_stake = c3.number_input("Stake", value=float(row['Stake']), step=10.0)
-                n_ret = c4.number_input("Retorno", value=float(row['Retorno_Potencial']), step=10.0)
-                
-                l_res = ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"]
-                try: i_res = l_res.index(row['Resultado'])
-                except: i_res = 0
-                n_res = st.selectbox("Resultado", l_res, index=i_res)
-                
-                cb1, cb2 = st.columns(2)
-                if cb1.button("⬅️ Voltar", use_container_width=True):
-                    st.session_state['edit_mode'] = False
-                    st.rerun()
-                if cb2.button("💾 Atualizar", type="primary", use_container_width=True):
-                    lucro = 0.0
-                    if "Green" in n_res: lucro = n_ret - n_stake
-                    elif "Red" in n_res: lucro = -n_stake
-                    
-                    df.at[idx, 'Data'] = str(n_data)
-                    df.at[idx, 'Time/Evento'] = n_evento
-                    df.at[idx, 'Mercado'] = n_merc
-                    df.at[idx, 'Stake'] = n_stake
-                    df.at[idx, 'Retorno_Potencial'] = n_ret
-                    df.at[idx, 'Odd'] = round(n_ret/n_stake, 2) if n_stake > 0 else 0
-                    df.at[idx, 'Resultado'] = n_res
-                    df.at[idx, 'Lucro/Prejuizo'] = lucro
-                    
-                    if atualizar_planilha_usuario(df, usuario):
-                        st.success("Atualizado!")
-                        st.session_state['edit_mode'] = False
-                        time.sleep(1)
-                        st.rerun()
-
-# --- ABA 3: DASHBOARD PROFISSIONAL ---
-elif selected == "Dash":
-    st.session_state['edit_mode'] = False
-    st.subheader("📊 Dashboard Profissional")
-    
-    df = carregar_apostas(usuario)
-    
-    if df.empty:
-        st.warning("Sem dados para analisar. Registre algumas apostas!")
-    else:
-        # --- 1. FILTRO DE DATAS ---
-        with st.expander("📅 Filtros de Data", expanded=True):
-            col_d1, col_d2 = st.columns(2)
-            d_inicio = col_d1.date_input("Início", date.today() - timedelta(days=30))
-            d_fim = col_d2.date_input("Fim", date.today())
-        
-        # Aplicando Filtro
-        mask = (df['Data'] >= d_inicio) & (df['Data'] <= d_fim)
-        df_filtered = df.loc[mask]
-        
-        if df_filtered.empty:
-            st.info("Nenhuma aposta neste período.")
-        else:
-            # Separa apenas as resolvidas para cálculo de Winrate/ROI
-            df_resolvidas = df_filtered[df_filtered['Resultado'].isin(["Green (Venceu)", "Red (Perdeu)"])]
-            
-            # --- 2. CÁLCULO DE KPIS ---
-            lucro_total = df_filtered["Lucro/Prejuizo"].sum()
-            total_apostado = df_filtered["Stake"].sum()
-            num_apostas = len(df_filtered)
-            
-            roi = (lucro_total / total_apostado * 100) if total_apostado > 0 else 0.0
-            
-            # Winrate e Odd Média
-            win_count = len(df_resolvidas[df_resolvidas['Resultado'] == "Green (Venceu)"])
-            total_res = len(df_resolvidas)
-            winrate = (win_count / total_res * 100) if total_res > 0 else 0.0
-            
-            odd_media = df_filtered[df_filtered['Odd'] > 0]['Odd'].mean()
-            if pd.isna(odd_media): odd_media = 0.0
-            
-            lucro_medio = lucro_total / num_apostas if num_apostas > 0 else 0
-            
-            # --- 3. EXIBIÇÃO DOS KPIS (GRID) ---
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Lucro Total", f"R$ {lucro_total:.2f}", delta=f"{lucro_total:.2f}")
-            k2.metric("ROI (%)", f"{roi:.2f}%", delta_color="normal")
-            k3.metric("Winrate", f"{winrate:.1f}%")
-            k4.metric("Odd Média", f"{odd_media:.2f}")
-            
-            k5, k6, k7, k8 = st.columns(4)
-            k5.metric("Total Apostado", f"R$ {total_apostado:.2f}")
-            k6.metric("Nº Apostas", f"{num_apostas}")
-            k7.metric("Lucro Médio/Bet", f"R$ {lucro_medio:.2f}")
-            
-            # Se tiver lucro, mostra mensagem de incentivo
-            if lucro_total > 0:
-                st.success(f"🚀 Você está LUCROU R$ {lucro_total:.2f} neste período!")
-            elif lucro_total < 0:
-                st.error(f"⚠️ Atenção! Prejuízo de R$ {lucro_total:.2f}. Revise sua gestão.")
-
-            st.markdown("---")
-            
-            # --- 4. GRÁFICOS AVANÇADOS ---
-            
-            # Gráfico 1: Evolução da Banca (Linha do Tempo)
-            # Ordena por data para o gráfico fazer sentido
-            df_chart = df_filtered.sort_values(by="Data")
-            df_chart['Acumulado'] = df_chart['Lucro/Prejuizo'].cumsum()
-            
-            fig_evolucao = px.area(
-                df_chart, x='Data', y='Acumulado', 
-                title="📈 Crescimento da Banca (Curva de Lucro)",
-                markers=True,
-                color_discrete_sequence=["#00CC96"] if lucro_total >= 0 else ["#EF553B"]
-            )
-            fig_evolucao.update_layout(hovermode="x unified")
-            st.plotly_chart(fig_evolucao, use_container_width=True)
-            
-            c_g1, c_g2 = st.columns(2)
-            
-            with c_g1:
-                # Gráfico 2: Raio-X dos Mercados (Barras Horizontais)
-                # Agrupa por mercado e soma o lucro
-                df_mercado = df_filtered.groupby("Mercado")["Lucro/Prejuizo"].sum().reset_index()
-                df_mercado = df_mercado.sort_values(by="Lucro/Prejuizo", ascending=True)
-                
-                # Cores dinâmicas (Verde se > 0, Vermelho se < 0)
-                df_mercado["Cor"] = df_mercado["Lucro/Prejuizo"].apply(lambda x: "Lucro" if x >= 0 else "Prejuízo")
-                color_map = {"Lucro": "#00CC96", "Prejuízo": "#EF553B"}
-                
-                fig_merc = px.bar(
-                    df_mercado, y="Mercado", x="Lucro/Prejuizo", color="Cor",
-                    title="📊 Onde você ganha (e perde) dinheiro?",
-                    orientation='h',
-                    color_discrete_map=color_map,
-                    text_auto='.2f'
-                )
-                st.plotly_chart(fig_merc, use_container_width=True)
-            
-            with c_g2:
-                # Gráfico 3: Distribuição de Resultados (Donut)
-                res_counts = df_filtered['Resultado'].value_counts().reset_index()
-                res_counts.columns = ['Resultado', 'Qtd']
-                
-                color_map_res = {
-                    "Green (Venceu)": "#00CC96", 
-                    "Red (Perdeu)": "#EF553B", 
-                    "Reembolso": "#FFA15A", 
-                    "Pendente": "#AB63FA"
-                }
-                
-                fig_pizza = px.pie(
-                    res_counts, names='Resultado', values='Qtd',
-                    title="🎯 Qualidade das Entradas",
-                    hole=0.4,
-                    color='Resultado',
-                    color_discrete_map=color_map_res
-                )
-                st.plotly_chart(fig_pizza, use_container_width=True)
-                
-            # Gráfico 4: Análise de Stake (Scatter Plot)
-            st.markdown("##### 🔎 Análise de Controle (Stake vs Resultado)")
-            fig_scatter = px.scatter(
-                df_filtered, x="Stake", y="Lucro/Prejuizo",
-                color="Resultado",
-                size="Stake",
-                hover_data=["Time/Evento", "Mercado"],
-                title="Suas maiores stakes estão dando lucro ou prejuízo?",
-                color_discrete_map=color_map_res
-            )
-            # Adiciona uma linha de zero para referência
-            fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray")
-            st.plotly_chart(fig_scatter, use_container_width=True)
