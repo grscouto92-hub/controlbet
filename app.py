@@ -214,28 +214,39 @@ selected = option_menu(
     }
 )
 
-# --- ABA 1: NOVO (Com limpeza de campos) ---
+# --- ABA 1: NOVO (Com limpeza automática de campos) ---
 if selected == "Novo":
     st.session_state['edit_mode'] = False
     st.subheader("📝 Registrar")
     
+    # 1. Inicializa variáveis no Session State se não existirem
+    if 'n_data' not in st.session_state: st.session_state.n_data = date.today()
+    if 'n_evento' not in st.session_state: st.session_state.n_evento = ""
+    if 'n_mercado' not in st.session_state: st.session_state.n_mercado = MERCADOS_FUTEBOL[0]
+    if 'n_stake' not in st.session_state: st.session_state.n_stake = 0.0
+    if 'n_retorno' not in st.session_state: st.session_state.n_retorno = 0.0
+    if 'n_resultado' not in st.session_state: st.session_state.n_resultado = "Pendente"
+
+    # 2. Construção dos Inputs vinculados às Keys
     c1, c2 = st.columns([1, 2])
-    # Adicionamos keys para controle de estado
-    with c1: data_aposta = st.date_input("Data", date.today(), key="n_data")
-    with c2: evento = st.text_input("Evento", key="n_evento")
+    data_aposta = c1.date_input("Data", key="n_data")
+    evento = c2.text_input("Evento", key="n_evento")
     
     mercado = st.selectbox("Mercado", MERCADOS_FUTEBOL, key="n_mercado")
     
     c3, c4, c5 = st.columns(3)
-    with c3: stake = st.number_input("Stake", min_value=0.0, step=10.0, key="n_stake")
-    with c4: retorno = st.number_input("Retorno", min_value=0.0, step=10.0, key="n_retorno")
+    stake = c3.number_input("Stake", min_value=0.0, step=10.0, format="%.2f", key="n_stake")
+    retorno = c4.number_input("Retorno", min_value=0.0, step=10.0, format="%.2f", key="n_retorno")
     
     with c5:
-        if stake > 0 and retorno > 0: st.metric("Odd", f"{retorno/stake:.2f}")
-        else: st.write("Odd: 0.00")
+        if stake > 0 and retorno > 0: 
+            st.metric("Odd", f"{retorno/stake:.2f}")
+        else: 
+            st.write("Odd: 0.00")
         
     resultado = st.selectbox("Resultado", ["Pendente", "Green (Venceu)", "Red (Perdeu)", "Reembolso"], key="n_resultado")
     
+    # 3. Lógica do Botão Salvar
     if st.button("💾 Salvar", type="primary", use_container_width=True):
         if stake > 0 and retorno >= stake and evento:
             lucro = 0.0
@@ -243,23 +254,34 @@ if selected == "Novo":
             elif "Red" in resultado: lucro = -stake
             
             nova = {
-                "Usuario": usuario, "Data": str(data_aposta), "Esporte": "Futebol",
-                "Time/Evento": evento, "Mercado": mercado, "Odd": round(retorno/stake, 2),
-                "Stake": stake, "Retorno_Potencial": retorno, "Resultado": resultado, "Lucro/Prejuizo": lucro
+                "Usuario": usuario, 
+                "Data": str(data_aposta), 
+                "Esporte": "Futebol",
+                "Time/Evento": evento, 
+                "Mercado": mercado, 
+                "Odd": round(retorno/stake, 2) if stake > 0 else 0,
+                "Stake": stake, 
+                "Retorno_Potencial": retorno, 
+                "Resultado": resultado, 
+                "Lucro/Prejuizo": lucro
             }
             
             if salvar_aposta(nova):
-                st.success("Sucesso!")
-                # --- LIMPEZA DOS CAMPOS NO SESSION STATE ---
+                st.success("Aposta registrada!")
+                
+                # --- LIMPEZA FORÇADA DOS CAMPOS ---
+                # Isso atualiza o Session State antes do rerun, garantindo que os campos voltem vazios
                 st.session_state['n_evento'] = ""
                 st.session_state['n_stake'] = 0.0
                 st.session_state['n_retorno'] = 0.0
                 st.session_state['n_resultado'] = "Pendente"
-                # Obs: Não limpamos Data e Mercado de propósito para facilitar inserção em sequência
+                # Opcional: manter data e mercado para facilitar lançamentos em sequência
+                # st.session_state['n_data'] = date.today() 
                 
                 time.sleep(0.5)
                 st.rerun()
-        else: st.error("Verifique os dados")
+        else: 
+            st.error("Verifique: Stake > 0 e nome do Evento preenchido.")
 
 # --- ABA 2: APOSTAS (LISTA COM AÇÕES RÁPIDAS) ---
 elif selected == "Apostas":
@@ -388,7 +410,7 @@ elif selected == "Apostas":
                         time.sleep(1)
                         st.rerun()
 
-# --- ABA 3: KPI's (NOME ALTERADO) ---
+# --- ABA 3: KPI's (NOME ATUALIZADO) ---
 elif selected == "KPI's":
     st.session_state['edit_mode'] = False
     st.subheader("📊 KPI's Profissionais")
