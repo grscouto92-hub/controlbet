@@ -187,7 +187,7 @@ with st.sidebar:
 
 selected = option_menu(
     menu_title=None,
-    options=["Novo", "Apostas", "Relatórios"], 
+    options=["Novo", "Apostas", "Dash"], 
     icons=["plus-circle", "list-check", "graph-up-arrow"], 
     default_index=0,
     orientation="horizontal",
@@ -321,7 +321,7 @@ elif selected == "Apostas":
                         st.rerun()
 
 # --- ABA 3: DASHBOARD PROFISSIONAL ---
-elif selected == "Relatórios":
+elif selected == "Dash":
     st.session_state['edit_mode'] = False
     st.subheader("📊 Dashboard Profissional")
     
@@ -454,3 +454,4 @@ elif selected == "Relatórios":
             # Adiciona uma linha de zero para referência
             fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray")
             st.plotly_chart(fig_scatter, use_container_width=True)
+
