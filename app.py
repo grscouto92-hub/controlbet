@@ -13,13 +13,12 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-# --- 3. CSS (LIMPO E SEM TEXTWRAP) ---
+# --- 3. CSS Otimizado (Sem classes que causam bugs) ---
 st.markdown("""
 <style>
-    /* Ajuste de espaçamento mobile */
     .block-container { padding-top: 1rem; padding-bottom: 5rem; }
     
-    /* CARD PADRÃO */
+    /* CARD PRINCIPAL */
     .tip-card {
         background-color: #1e1e1e;
         border-radius: 12px;
@@ -53,6 +52,7 @@ st.markdown("""
         font-weight: bold; font-size: 1.1rem;
     }
     
+    /* Badge de Confiança */
     .tip-confidence {
         font-size: 0.75rem; color: #ffd700;
         background-color: #333333; padding: 4px 8px;
@@ -61,7 +61,8 @@ st.markdown("""
         border: 1px solid #555;
     }
 
-    .tip-analysis, .tip-footer { color: #dddddd !important; }
+    .tip-analysis { margin-top: 12px; font-size: 0.9rem; color: #dddddd !important; }
+    .tip-footer { margin-top: 10px; font-size: 0.85rem; text-align: right; font-weight: bold; color: #dddddd !important; }
     
     /* Botão CTA Lateral */
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
@@ -103,35 +104,34 @@ def exibir_card(row):
     elif status == "Red": css_class, icone = "status-red", "❌ Red"
     elif status == "Anulada": icone = "🔄 Anulada"
 
+    # Monta o HTML da confiança se existir
     html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>' if confianca else ""
 
-    # AQUI ESTAVA O ERRO: Removi o textwrap e simplifiquei a string.
-    # O uso de f-string normal evita erros de indentação.
-    html_card = f"""
-    <div class="tip-card {css_class}">
-        <div class="tip-header">
-            <span>⚽ {row['Liga']}</span>
-            <span>{row['Data']} • {row['Hora']}</span>
+    # HTML Simplificado (Sem textwrap e com formatação direta para evitar erro visual)
+    st.markdown(f"""
+<div class="tip-card {css_class}">
+    <div class="tip-header">
+        <span>⚽ {row['Liga']}</span>
+        <span>{row['Data']} • {row['Hora']}</span>
+    </div>
+    <div class="tip-match">{row['Jogo']}</div>
+    <div class="tip-bet">
+        <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 500;">{row['Aposta']}</span>
         </div>
-        <div class="tip-match">{row['Jogo']}</div>
-        <div class="tip-bet">
-            <div style="display: flex; flex-direction: column;">
-                <span style="font-weight: 500;">{row['Aposta']}</span>
-            </div>
-            <div style="display: flex; align-items: center;">
-                {html_confianca}
-                <span class="tip-odd">@{row['Odd']}</span>
-            </div>
-        </div>
-        <div class="tip-analysis" style="margin-top: 12px; font-size: 0.9rem;">
-            💡 <i>"{row['Analise']}"</i>
-        </div>
-        <div class="tip-footer" style="margin-top: 10px; font-size: 0.85rem; text-align: right; font-weight: bold;">
-            {icone} | Unidades: {row['Unidades']}
+        <div style="display: flex; align-items: center;">
+            {html_confianca}
+            <span class="tip-odd">@{row['Odd']}</span>
         </div>
     </div>
-    """
-    st.markdown(html_card, unsafe_allow_html=True)
+    <div class="tip-analysis">
+        💡 <i>"{row['Analise']}"</i>
+    </div>
+    <div class="tip-footer">
+        {icone} | Unidades: {row['Unidades']}
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --- 5. Conexão Google Sheets ---
 @st.cache_data(ttl=60) 
@@ -165,7 +165,7 @@ def main():
         st.caption("Análises profissionais de Futebol")
 
     if not HAS_PLOTLY:
-        st.warning("⚠️ Biblioteca 'Plotly' não instalada (Gráficos desativados).")
+        st.warning("⚠️ Plotly não instalado.")
 
     df = carregar_tips()
     if df.empty:
@@ -200,16 +200,31 @@ def main():
 
     aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico"])
     
-    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
+    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])].copy() # .copy() evita aviso de SettingWithCopy
     df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
 
-    # --- ABA 1: Jogos Abertos ---
+    # --- ABA 1: Jogos Abertos (COM ORDENAÇÃO POR DATA) ---
     with aba_jogos:
         st.markdown("##### Próximas Entradas")
         if df_pendentes.empty:
             st.info("Nenhuma entrada pendente.")
         else:
-            df_pendentes = df_pendentes.iloc[::-1]
+            # 1. Cria coluna datetime temporária para ordenar corretamente
+            try:
+                # Junta Data e Hora para criar um objeto de data que o Python entende
+                df_pendentes['Data_Hora_Sort'] = pd.to_datetime(
+                    df_pendentes['Data'] + ' ' + df_pendentes['Hora'], 
+                    format='%d/%m/%Y %H:%M', 
+                    dayfirst=True, 
+                    errors='coerce'
+                )
+                # 2. Ordena Ascendente (Do mais antigo/próximo para o futuro)
+                df_pendentes = df_pendentes.sort_values('Data_Hora_Sort', ascending=True)
+            except Exception as e:
+                # Se falhar a conversão, usa a ordem padrão invertida
+                df_pendentes = df_pendentes.iloc[::-1]
+
+            # 3. Exibe os cards já ordenados
             for i, row in df_pendentes.iterrows():
                 exibir_card(row)
 
@@ -249,12 +264,12 @@ def main():
                 st.markdown("---")
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c1: 
-                    if st.button("⬅️", disabled=(st.session_state.pagina_atual == 0)): 
+                    if st.button("⬅️", key="prev"): 
                         st.session_state.pagina_atual -= 1
                         st.rerun()
                 with c2: st.markdown(f"<div style='text-align:center; padding-top:5px'>{st.session_state.pagina_atual + 1}/{total_paginas}</div>", unsafe_allow_html=True)
                 with c3: 
-                    if st.button("➡️", disabled=(st.session_state.pagina_atual == total_paginas - 1)): 
+                    if st.button("➡️", key="next"): 
                         st.session_state.pagina_atual += 1
                         st.rerun()
 
