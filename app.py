@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+from datetime import datetime
+import pytz # Para garantir o fuso horário do Brasil
 
 # --- 1. Configuração da Página ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
@@ -106,7 +108,6 @@ def exibir_card(row):
 
     html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>' if confianca else ""
 
-    # HTML Puro com f-string (Mais seguro contra erros visuais)
     html_content = f"""
 <div class="tip-card {css_class}">
     <div class="tip-header">
@@ -149,6 +150,17 @@ def carregar_tips():
             df['Odd_Num'] = df['Odd'].apply(limpar_numero)
             df['Unid_Num'] = df['Unidades'].apply(limpar_numero)
             df['Lucro'] = df.apply(calcular_resultado, axis=1)
+            
+            # Cria coluna de Data/Hora Ordenável
+            df['Data_Hora_Sort'] = pd.to_datetime(
+                df['Data'] + ' ' + df['Hora'], 
+                format='%d/%m/%Y %H:%M', 
+                dayfirst=True, 
+                errors='coerce'
+            )
+            # Cria coluna apenas de Data (datetime) para comparar com "Hoje"
+            df['Data_Dt'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
+
         return df
     except Exception as e:
         st.error(f"Erro ao conectar na planilha: {e}")
@@ -172,6 +184,11 @@ def main():
         st.info("Carregando dados...")
         return
 
+    # --- DATAS ---
+    # Pega a data de hoje no fuso do Brasil
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    hoje = datetime.now(fuso_br).date()
+
     # Sidebar
     with st.sidebar:
         st.markdown("""<a href="https://t.me/seulink" target="_blank" class="cta-button">🚀 GRUPO VIP (Entrar)</a>""", unsafe_allow_html=True)
@@ -183,69 +200,75 @@ def main():
         if filtro_liga: df = df[df['Liga'].isin(filtro_liga)]
         if busca_time: df = df[df['Jogo'].str.contains(busca_time, case=False, na=False)]
 
-    # Estatísticas
+    # --- CÁLCULO DE ESTATÍSTICAS (ROI) ---
     df_res = df[df['Status'].isin(['Green', 'Red'])]
     greens = len(df_res[df_res['Status'] == 'Green'])
     total = len(df_res)
     winrate = (greens / total * 100) if total > 0 else 0
-    lucro = df_res['Lucro'].sum()
+    
+    # Cálculo do ROI
+    lucro_total = df_res['Lucro'].sum()
+    investimento_total = df_res['Unid_Num'].sum()
+    roi = (lucro_total / investimento_total * 100) if investimento_total > 0 else 0
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Winrate", f"{winrate:.0f}%")
     c2.metric("Greens", f"{greens}")
     c3.metric("Final.", f"{total}")
-    c4.metric("Lucro", f"{lucro:+.1f}")
+    c4.metric("ROI", f"{roi:+.1f}%") # Exibição em Porcentagem
 
     st.divider()
 
-    aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico"])
+    aba_hoje, aba_historico = st.tabs(["🔥 Jogos de Hoje", "📊 Histórico Passado"])
     
-    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])].copy()
-    df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
+    # --- SEPARAÇÃO DOS DADOS ---
+    # Filtra o DataFrame onde a data é igual a Hoje (ignorando horas)
+    df_hoje = df[df['Data_Dt'].dt.date == hoje]
+    
+    # Filtra o Histórico (datas anteriores a hoje)
+    df_antigos = df[df['Data_Dt'].dt.date < hoje]
 
-    # --- ABA 1: Jogos Abertos (Ordenados por Hora) ---
-    with aba_jogos:
-        st.markdown("##### Próximas Entradas")
-        if df_pendentes.empty:
-            st.info("Nenhuma entrada pendente.")
+    # --- ABA 1: JOGOS DE HOJE ---
+    with aba_hoje:
+        if df_hoje.empty:
+            st.info(f"Nenhuma tip cadastrada para hoje ({hoje.strftime('%d/%m')}).")
         else:
-            try:
-                # Converte para datetime para ordenar corretamente (Dia + Hora)
-                df_pendentes['Data_Hora_Sort'] = pd.to_datetime(
-                    df_pendentes['Data'] + ' ' + df_pendentes['Hora'], 
-                    format='%d/%m/%Y %H:%M', 
-                    dayfirst=True, 
-                    errors='coerce'
-                )
-                # Ordena: Mais próximos primeiro
-                df_pendentes = df_pendentes.sort_values('Data_Hora_Sort', ascending=True)
-            except:
-                # Se falhar, inverte a lista padrão
-                df_pendentes = df_pendentes.iloc[::-1]
+            # Separa Pendentes e Finalizados de Hoje
+            hoje_pendentes = df_hoje[~df_hoje['Status'].isin(['Green', 'Red', 'Anulada'])].copy()
+            hoje_finalizados = df_hoje[df_hoje['Status'].isin(['Green', 'Red', 'Anulada'])].copy()
+            
+            # Ordenação: Pendentes por horário (Cedo -> Tarde)
+            hoje_pendentes = hoje_pendentes.sort_values('Data_Hora_Sort', ascending=True)
+            
+            # Ordenação: Finalizados por horário (Cedo -> Tarde ou Tarde -> Cedo)
+            hoje_finalizados = hoje_finalizados.sort_values('Data_Hora_Sort', ascending=False)
 
-            for i, row in df_pendentes.iterrows():
-                exibir_card(row)
+            st.markdown("##### ⏳ Próximos Jogos")
+            if hoje_pendentes.empty:
+                st.caption("Sem jogos pendentes para hoje.")
+            else:
+                for i, row in hoje_pendentes.iterrows():
+                    exibir_card(row)
+            
+            # Mostra finalizados de hoje no final da lista
+            if not hoje_finalizados.empty:
+                st.markdown("---")
+                st.markdown("##### ✅ Finalizados Hoje")
+                for i, row in hoje_finalizados.iterrows():
+                    exibir_card(row)
 
-    # --- ABA 2: Histórico ---
+    # --- ABA 2: HISTÓRICO (Passado) ---
     with aba_historico:
+        # Gráfico (Baseado em TODOS os resolvidos, para mostrar a curva real da banca)
         if HAS_PLOTLY and not df_res.empty:
             try:
-                # Prepara dados para o gráfico
-                df_res['Data_Dt'] = pd.to_datetime(df_res['Data'], dayfirst=True, errors='coerce')
                 df_chart = df_res.dropna(subset=['Data_Dt']).copy()
                 df_diario = df_chart.groupby('Data_Dt')['Lucro'].sum().reset_index().sort_values('Data_Dt')
                 df_diario['Acumulado'] = df_diario['Lucro'].cumsum()
                 
-                # --- CRIAÇÃO DO GRÁFICO ---
                 fig = px.line(df_diario, x='Data_Dt', y='Acumulado', markers=True)
                 fig.update_traces(line_color='#00e676', line_width=3)
-                
-                # --- AQUI ESTÁ A CORREÇÃO DO EIXO X (DATA) ---
-                fig.update_xaxes(
-                    tickformat="%d/%m",  # Formato Dia/Mês (ex: 09/01)
-                    dtick="D1"           # Força marcação diária se possível
-                )
-                
+                fig.update_xaxes(tickformat="%d/%m", dtick="D1")
                 fig.update_layout(
                     template="plotly_dark", 
                     plot_bgcolor='rgba(0,0,0,0)', 
@@ -255,24 +278,26 @@ def main():
                     xaxis_title=None, 
                     yaxis_title="Lucro (U)"
                 )
-                st.markdown("##### 📈 Evolução")
+                st.markdown("##### 📈 Evolução Geral")
                 st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.caption(f"Dados insuficientes para gráfico: {e}")
+            except: pass
 
-        st.markdown("##### Últimos Resultados")
-        if df_historico.empty:
-            st.info("Nenhum histórico disponível.")
+        st.markdown("##### Histórico Anterior")
+        if df_antigos.empty:
+            st.info("Nenhum histórico anterior disponível.")
         else:
-            df_historico = df_historico.iloc[::-1]
+            # Ordena do mais recente para o mais antigo
+            df_antigos = df_antigos.sort_values('Data_Hora_Sort', ascending=False)
+            
+            # Paginação
             ITENS_POR_PAGINA = 10
-            total_paginas = max(1, (len(df_historico) - 1) // ITENS_POR_PAGINA + 1)
+            total_paginas = max(1, (len(df_antigos) - 1) // ITENS_POR_PAGINA + 1)
             
             if st.session_state.pagina_atual >= total_paginas: st.session_state.pagina_atual = total_paginas - 1
             if st.session_state.pagina_atual < 0: st.session_state.pagina_atual = 0
             
             inicio = st.session_state.pagina_atual * ITENS_POR_PAGINA
-            df_pagina = df_historico.iloc[inicio:inicio + ITENS_POR_PAGINA]
+            df_pagina = df_antigos.iloc[inicio:inicio + ITENS_POR_PAGINA]
             
             for i, row in df_pagina.iterrows(): exibir_card(row)
             
