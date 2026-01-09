@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-import textwrap
 
 # --- 1. Configuração da Página ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
@@ -14,7 +13,7 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-# --- 3. CSS (LIMPO: Sem classes de bloqueio/blur) ---
+# --- 3. CSS (LIMPO E SEM TEXTWRAP) ---
 st.markdown("""
 <style>
     /* Ajuste de espaçamento mobile */
@@ -106,8 +105,9 @@ def exibir_card(row):
 
     html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>' if confianca else ""
 
-    # Textwrap garante que o HTML não quebre a indentação
-    html = textwrap.dedent(f"""
+    # AQUI ESTAVA O ERRO: Removi o textwrap e simplifiquei a string.
+    # O uso de f-string normal evita erros de indentação.
+    html_card = f"""
     <div class="tip-card {css_class}">
         <div class="tip-header">
             <span>⚽ {row['Liga']}</span>
@@ -130,8 +130,8 @@ def exibir_card(row):
             {icone} | Unidades: {row['Unidades']}
         </div>
     </div>
-    """)
-    st.markdown(html, unsafe_allow_html=True)
+    """
+    st.markdown(html_card, unsafe_allow_html=True)
 
 # --- 5. Conexão Google Sheets ---
 @st.cache_data(ttl=60) 
@@ -203,14 +203,13 @@ def main():
     df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
     df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
 
-    # --- ABA 1: Jogos Abertos (SEM BLOQUEIO) ---
+    # --- ABA 1: Jogos Abertos ---
     with aba_jogos:
         st.markdown("##### Próximas Entradas")
         if df_pendentes.empty:
             st.info("Nenhuma entrada pendente.")
         else:
             df_pendentes = df_pendentes.iloc[::-1]
-            # Loop Simples: Exibe tudo
             for i, row in df_pendentes.iterrows():
                 exibir_card(row)
 
