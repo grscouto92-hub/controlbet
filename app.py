@@ -7,21 +7,20 @@ import textwrap
 # --- 1. Configuração da Página ---
 st.set_page_config(page_title="GuiTips | Canal Oficial", page_icon="🦁", layout="centered")
 
-# --- 2. Tentativa de Importar Plotly (Para Gráficos) ---
-# Se falhar, o site abre sem gráficos em vez de dar tela preta
+# --- 2. Tentativa de Importar Plotly ---
 try:
     import plotly.express as px
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
 
-# --- 3. CSS Personalizado (Visual Limpo e Profissional) ---
+# --- 3. CSS (LIMPO: Sem classes de bloqueio/blur) ---
 st.markdown("""
 <style>
-    /* Ajuste de espaçamento para mobile */
+    /* Ajuste de espaçamento mobile */
     .block-container { padding-top: 1rem; padding-bottom: 5rem; }
     
-    /* CARD PRINCIPAL */
+    /* CARD PADRÃO */
     .tip-card {
         background-color: #1e1e1e;
         border-radius: 12px;
@@ -32,69 +31,47 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Cabeçalho do Card (Liga e Data) */
     .tip-header {
-        display: flex;
-        justify-content: space-between;
-        color: #aaaaaa;
-        font-size: 0.8rem;
-        margin-bottom: 8px;
+        display: flex; justify-content: space-between;
+        color: #aaaaaa; font-size: 0.8rem; margin-bottom: 8px;
     }
     
-    /* Jogo (Título) */
     .tip-match {
-        font-size: 1.1rem;
-        font-weight: bold;
-        color: #ffffff !important;
-        margin-bottom: 10px;
+        font-size: 1.1rem; font-weight: bold;
+        color: #ffffff !important; margin-bottom: 10px;
     }
     
-    /* Caixa da Aposta */
     .tip-bet {
         background-color: #2b2b2b;
-        padding: 10px;
-        border-radius: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        padding: 10px; border-radius: 8px;
+        display: flex; justify-content: space-between; align-items: center;
         border: 1px solid #383838;
         color: #ffffff !important;
     }
     
-    /* Destaque da Odd */
     .tip-odd {
         color: #00e676 !important;
-        font-weight: bold;
-        font-size: 1.1rem;
+        font-weight: bold; font-size: 1.1rem;
     }
     
-    /* Badge de Confiança */
     .tip-confidence {
-        font-size: 0.75rem;
-        color: #ffd700;
-        background-color: #333333;
-        padding: 4px 8px;
-        border-radius: 4px;
-        margin-right: 10px;
-        font-weight: bold;
-        display: inline-flex;
-        align-items: center;
+        font-size: 0.75rem; color: #ffd700;
+        background-color: #333333; padding: 4px 8px;
+        border-radius: 4px; margin-right: 10px;
+        font-weight: bold; display: inline-flex; align-items: center;
         border: 1px solid #555;
     }
 
-    /* Análise e Rodapé */
-    .tip-analysis { color: #dddddd !important; }
-    .tip-footer { color: #dddddd !important; }
+    .tip-analysis, .tip-footer { color: #dddddd !important; }
     
-    /* Botão CTA Lateral (Piscante) */
+    /* Botão CTA Lateral */
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } }
     .cta-button { 
         display: block; width: 100%; padding: 12px; 
         background-color: #00e676; color: #000 !important; 
         text-align: center; font-weight: bold; text-decoration: none; 
         border-radius: 8px; margin-bottom: 20px; 
-        animation: pulse 2s infinite; 
-        text-transform: uppercase; letter-spacing: 1px; 
+        animation: pulse 2s infinite; text-transform: uppercase; letter-spacing: 1px; 
     }
 
     /* Cores de Status */
@@ -122,16 +99,14 @@ def exibir_card(row):
     status = str(row['Status']).strip().title()
     confianca = str(row.get('Confiança', '')).strip()
     
-    # Define cores e ícones
     css_class, icone = "status-pending", "⏳ Pendente"
     if status == "Green": css_class, icone = "status-green", "✅ Green"
     elif status == "Red": css_class, icone = "status-red", "❌ Red"
     elif status == "Anulada": icone = "🔄 Anulada"
 
-    # HTML do Badge de Confiança
     html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>' if confianca else ""
 
-    # HTML do Card (Usando textwrap para evitar erros de renderização)
+    # Textwrap garante que o HTML não quebre a indentação
     html = textwrap.dedent(f"""
     <div class="tip-card {css_class}">
         <div class="tip-header">
@@ -163,21 +138,17 @@ def exibir_card(row):
 def carregar_tips():
     try:
         if "gcp_service_account" not in st.secrets: return pd.DataFrame()
-        
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
-        
         sheet = client.open("ControlBET").worksheet("Tips")
         dados = sheet.get_all_records()
         df = pd.DataFrame(dados)
-        
         if not df.empty:
             df['Odd_Num'] = df['Odd'].apply(limpar_numero)
             df['Unid_Num'] = df['Unidades'].apply(limpar_numero)
             df['Lucro'] = df.apply(calcular_resultado, axis=1)
-            
         return df
     except Exception as e:
         st.error(f"Erro ao conectar na planilha: {e}")
@@ -187,38 +158,32 @@ def carregar_tips():
 def main():
     if 'pagina_atual' not in st.session_state: st.session_state.pagina_atual = 0
 
-    # Cabeçalho
     col_logo, col_title = st.columns([1, 4])
     with col_logo: st.markdown("# 🦁")
     with col_title:
         st.markdown("### GuiTips")
         st.caption("Análises profissionais de Futebol")
 
-    # Verifica Plotly
     if not HAS_PLOTLY:
-        st.warning("⚠️ Biblioteca 'Plotly' não instalada. Gráficos desativados.")
+        st.warning("⚠️ Biblioteca 'Plotly' não instalada (Gráficos desativados).")
 
     df = carregar_tips()
     if df.empty:
         st.info("Carregando dados...")
         return
 
-    # --- SIDEBAR ---
+    # Sidebar
     with st.sidebar:
-        # Botão para entrar no grupo (mantive pois é bom para conversão)
         st.markdown("""<a href="https://t.me/seulink" target="_blank" class="cta-button">🚀 GRUPO VIP (Entrar)</a>""", unsafe_allow_html=True)
         st.divider()
         st.header("🔍 Filtros")
-        
-        # Filtros
         busca_time = st.text_input("Buscar Time", placeholder="Ex: Flamengo")
         filtro_liga = st.multiselect("Filtrar por Liga", df['Liga'].unique().tolist())
         
-        # Aplica filtros
         if filtro_liga: df = df[df['Liga'].isin(filtro_liga)]
         if busca_time: df = df[df['Jogo'].str.contains(busca_time, case=False, na=False)]
 
-    # --- ESTATÍSTICAS ---
+    # Estatísticas
     df_res = df[df['Status'].isin(['Green', 'Red'])]
     greens = len(df_res[df_res['Status'] == 'Green'])
     total = len(df_res)
@@ -233,81 +198,54 @@ def main():
 
     st.divider()
 
-    # --- ABAS ---
     aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico"])
     
-    # Separa DataFrames
     df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])]
     df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
 
-    # --- ABA 1: Jogos Abertos (TUDO LIBERADO) ---
+    # --- ABA 1: Jogos Abertos (SEM BLOQUEIO) ---
     with aba_jogos:
         st.markdown("##### Próximas Entradas")
         if df_pendentes.empty:
-            st.info("Nenhuma entrada pendente no momento.")
+            st.info("Nenhuma entrada pendente.")
         else:
-            # Ordena: Mais recentes primeiro
             df_pendentes = df_pendentes.iloc[::-1]
-            
-            # Loop simples: Mostra todos os cards
+            # Loop Simples: Exibe tudo
             for i, row in df_pendentes.iterrows():
                 exibir_card(row)
 
-    # --- ABA 2: Histórico (Com Gráficos e Paginação) ---
+    # --- ABA 2: Histórico ---
     with aba_historico:
-        # Gráficos de Evolução
         if HAS_PLOTLY and not df_res.empty:
             try:
-                # Tratamento de data
                 df_res['Data_Dt'] = pd.to_datetime(df_res['Data'], dayfirst=True, errors='coerce')
                 df_chart = df_res.dropna(subset=['Data_Dt']).copy()
-                
-                # Agrupa por dia para o gráfico
                 df_diario = df_chart.groupby('Data_Dt')['Lucro'].sum().reset_index().sort_values('Data_Dt')
                 df_diario['Acumulado'] = df_diario['Lucro'].cumsum()
                 
-                # Renderiza Gráfico
                 fig = px.line(df_diario, x='Data_Dt', y='Acumulado', markers=True)
                 fig.update_traces(line_color='#00e676', line_width=3)
-                fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3)
-                fig.update_layout(
-                    template="plotly_dark", 
-                    plot_bgcolor='rgba(0,0,0,0)', 
-                    paper_bgcolor='rgba(0,0,0,0)', 
-                    margin=dict(l=0, r=0, t=0, b=0), 
-                    height=250, 
-                    xaxis_title=None, 
-                    yaxis_title="Lucro (U)"
-                )
-                st.markdown("##### 📈 Evolução da Banca")
+                fig.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=0, b=0), height=250, xaxis_title=None, yaxis_title="Lucro (U)")
+                st.markdown("##### 📈 Evolução")
                 st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.caption("Não foi possível gerar o gráfico com os dados atuais.")
+            except: pass
 
-        # Lista de Histórico com Paginação
         st.markdown("##### Últimos Resultados")
         if df_historico.empty:
             st.info("Nenhum histórico disponível.")
         else:
-            df_historico = df_historico.iloc[::-1] # Mais recentes primeiro
-            
-            # Paginação (10 por página)
+            df_historico = df_historico.iloc[::-1]
             ITENS_POR_PAGINA = 10
             total_paginas = max(1, (len(df_historico) - 1) // ITENS_POR_PAGINA + 1)
             
-            # Controle de sessão
             if st.session_state.pagina_atual >= total_paginas: st.session_state.pagina_atual = total_paginas - 1
             if st.session_state.pagina_atual < 0: st.session_state.pagina_atual = 0
             
-            # Fatia os dados
             inicio = st.session_state.pagina_atual * ITENS_POR_PAGINA
             df_pagina = df_historico.iloc[inicio:inicio + ITENS_POR_PAGINA]
             
-            # Exibe cards históricos
-            for i, row in df_pagina.iterrows(): 
-                exibir_card(row)
+            for i, row in df_pagina.iterrows(): exibir_card(row)
             
-            # Botões Anterior/Próximo
             if total_paginas > 1:
                 st.markdown("---")
                 c1, c2, c3 = st.columns([1, 2, 1])
@@ -321,7 +259,6 @@ def main():
                         st.session_state.pagina_atual += 1
                         st.rerun()
 
-    # Rodapé
     st.markdown("---")
     st.markdown("<div style='text-align: center; color: #666; font-size: 12px;'>⚠️ Aposte com responsabilidade. +18.</div>", unsafe_allow_html=True)
 
