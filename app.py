@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-# --- 3. CSS Otimizado (Sem classes que causam bugs) ---
+# --- 3. CSS Otimizado ---
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem; padding-bottom: 5rem; }
@@ -104,11 +104,10 @@ def exibir_card(row):
     elif status == "Red": css_class, icone = "status-red", "❌ Red"
     elif status == "Anulada": icone = "🔄 Anulada"
 
-    # Monta o HTML da confiança se existir
     html_confianca = f'<span class="tip-confidence">🎯 {confianca}</span>' if confianca else ""
 
-    # HTML Simplificado (Sem textwrap e com formatação direta para evitar erro visual)
-    st.markdown(f"""
+    # HTML Puro com f-string (Mais seguro contra erros visuais)
+    html_content = f"""
 <div class="tip-card {css_class}">
     <div class="tip-header">
         <span>⚽ {row['Liga']}</span>
@@ -131,7 +130,8 @@ def exibir_card(row):
         {icone} | Unidades: {row['Unidades']}
     </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+    st.markdown(html_content, unsafe_allow_html=True)
 
 # --- 5. Conexão Google Sheets ---
 @st.cache_data(ttl=60) 
@@ -200,31 +200,29 @@ def main():
 
     aba_jogos, aba_historico = st.tabs(["🔥 Jogos Abertos", "📊 Histórico"])
     
-    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])].copy() # .copy() evita aviso de SettingWithCopy
+    df_pendentes = df[~df['Status'].isin(['Green', 'Red', 'Anulada'])].copy()
     df_historico = df[df['Status'].isin(['Green', 'Red', 'Anulada'])]
 
-    # --- ABA 1: Jogos Abertos (COM ORDENAÇÃO POR DATA) ---
+    # --- ABA 1: Jogos Abertos (Ordenados por Hora) ---
     with aba_jogos:
         st.markdown("##### Próximas Entradas")
         if df_pendentes.empty:
             st.info("Nenhuma entrada pendente.")
         else:
-            # 1. Cria coluna datetime temporária para ordenar corretamente
             try:
-                # Junta Data e Hora para criar um objeto de data que o Python entende
+                # Converte para datetime para ordenar corretamente (Dia + Hora)
                 df_pendentes['Data_Hora_Sort'] = pd.to_datetime(
                     df_pendentes['Data'] + ' ' + df_pendentes['Hora'], 
                     format='%d/%m/%Y %H:%M', 
                     dayfirst=True, 
                     errors='coerce'
                 )
-                # 2. Ordena Ascendente (Do mais antigo/próximo para o futuro)
+                # Ordena: Mais próximos primeiro
                 df_pendentes = df_pendentes.sort_values('Data_Hora_Sort', ascending=True)
-            except Exception as e:
-                # Se falhar a conversão, usa a ordem padrão invertida
+            except:
+                # Se falhar, inverte a lista padrão
                 df_pendentes = df_pendentes.iloc[::-1]
 
-            # 3. Exibe os cards já ordenados
             for i, row in df_pendentes.iterrows():
                 exibir_card(row)
 
@@ -232,17 +230,35 @@ def main():
     with aba_historico:
         if HAS_PLOTLY and not df_res.empty:
             try:
+                # Prepara dados para o gráfico
                 df_res['Data_Dt'] = pd.to_datetime(df_res['Data'], dayfirst=True, errors='coerce')
                 df_chart = df_res.dropna(subset=['Data_Dt']).copy()
                 df_diario = df_chart.groupby('Data_Dt')['Lucro'].sum().reset_index().sort_values('Data_Dt')
                 df_diario['Acumulado'] = df_diario['Lucro'].cumsum()
                 
+                # --- CRIAÇÃO DO GRÁFICO ---
                 fig = px.line(df_diario, x='Data_Dt', y='Acumulado', markers=True)
                 fig.update_traces(line_color='#00e676', line_width=3)
-                fig.update_layout(template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=0, b=0), height=250, xaxis_title=None, yaxis_title="Lucro (U)")
+                
+                # --- AQUI ESTÁ A CORREÇÃO DO EIXO X (DATA) ---
+                fig.update_xaxes(
+                    tickformat="%d/%m",  # Formato Dia/Mês (ex: 09/01)
+                    dtick="D1"           # Força marcação diária se possível
+                )
+                
+                fig.update_layout(
+                    template="plotly_dark", 
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    margin=dict(l=0, r=0, t=0, b=0), 
+                    height=250, 
+                    xaxis_title=None, 
+                    yaxis_title="Lucro (U)"
+                )
                 st.markdown("##### 📈 Evolução")
                 st.plotly_chart(fig, use_container_width=True)
-            except: pass
+            except Exception as e:
+                st.caption(f"Dados insuficientes para gráfico: {e}")
 
         st.markdown("##### Últimos Resultados")
         if df_historico.empty:
