@@ -4,11 +4,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import plotly.express as px
-import cloudscraper # Biblioteca Anti-Bloqueio
+import cloudscraper
 from bs4 import BeautifulSoup
+import re
 
-# --- Configuração da Página (DEVE SER A PRIMEIRA LINHA) ---
-st.set_page_config(page_title="Gestão Profissional", page_icon="💼", layout="wide")
+# --- Configuração da Página ---
+st.set_page_config(page_title="Gestão Profissional", page_icon="⚽", layout="wide")
 
 # --- CSS Personalizado ---
 st.markdown("""
@@ -19,70 +20,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. SUPER ROBÔ DE BUSCA (Anti-Bloqueio) ---
-@st.cache_data(ttl=3600) # Cache de 1 hora
+# --- 1. ROBÔ DE BUSCA (Estratégia "Sites Leves") ---
+@st.cache_data(ttl=3600)
 def buscar_jogos_do_dia():
-    """Busca jogos usando Cloudscraper para evitar bloqueios"""
+    """Busca jogos em sites com menos proteção anti-bot"""
     jogos = []
-    scraper = cloudscraper.create_scraper() # Cria um 'navegador falso'
+    scraper = cloudscraper.create_scraper()
     
-    # --- FONTE 1: PLACAR DE FUTEBOL ---
+    # --- FONTE 1: JogosDeHoje.org (Site leve, alta taxa de sucesso) ---
     try:
-        url = "https://www.placardefutebol.com.br/jogos-de-hoje"
-        response = scraper.get(url) # Usa o scraper em vez de requests simples
+        url = "https://www.jogosdehoje.org"
+        response = scraper.get(url)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
-            # Procura blocos de jogos
-            items = soup.find_all('div', class_='match-list-item')
-            if not items: items = soup.find_all('a', class_='match-list-item')
+            # Procura por cartões de jogos
+            cards = soup.find_all('div', class_='match-card')
             
-            for item in items:
+            for card in cards:
                 try:
-                    casa = item.find(class_='team-home').get_text(strip=True)
-                    fora = item.find(class_='team-away').get_text(strip=True)
-                    
-                    liga = "Jogos de Hoje"
-                    parent = item.find_previous(class_='match-list-league')
-                    if parent: liga = parent.get_text(strip=True)
-                    
-                    jogos.append({
-                        "Liga": liga,
-                        "Jogo_Completo": f"{casa} x {fora}",
-                        "Search_Key": f"{casa} {fora}".lower()
-                    })
-                except: continue
-    except Exception as e:
-        print(f"Fonte 1 falhou: {e}")
-
-    # --- FONTE 2: ESPN (Fallback/Reserva) ---
-    # Se a primeira fonte falhar ou vier vazia, tenta a ESPN
-    if not jogos:
-        try:
-            url_espn = "https://www.espn.com.br/futebol/partidas"
-            response = scraper.get(url_espn)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Estrutura da ESPN (pode variar, tentativa genérica)
-            sections = soup.find_all('section', class_='Scoreboard')
-            for section in sections:
-                try:
-                    # Busca nomes dentro dos cards
-                    teams = section.find_all('div', class_='ScoreCell__TeamName')
-                    if len(teams) >= 2:
-                        casa = teams[0].get_text(strip=True)
-                        fora = teams[1].get_text(strip=True)
+                    # Tenta extrair nomes
+                    times = card.find_all('span', class_='team-name')
+                    if len(times) >= 2:
+                        casa = times[0].get_text(strip=True)
+                        fora = times[1].get_text(strip=True)
                         
-                        liga = "ESPN Jogos"
-                        header = section.find_previous('div', class_='Card__Header__Title')
+                        # Tenta liga
+                        liga = "Jogos de Hoje"
+                        header = card.find_previous('h3')
                         if header: liga = header.get_text(strip=True)
-                        
+
                         jogos.append({
                             "Liga": liga,
                             "Jogo_Completo": f"{casa} x {fora}",
                             "Search_Key": f"{casa} {fora}".lower()
                         })
                 except: continue
+    except Exception as e:
+        print(f"Fonte 1 falhou: {e}")
+
+    # --- FONTE 2: O Tempo (Portal de Notícias - Backup) ---
+    if not jogos:
+        try:
+            url_reserva = "https://www.otempo.com.br/sports/futebol/jogos-de-hoje"
+            response = scraper.get(url_reserva)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Varredura genérica em tabelas
+            linhas = soup.find_all('tr')
+            for linha in linhas:
+                texto = linha.get_text(" ", strip=True)
+                # Procura padrão "Time A x Time B" ou "Time A vs Time B"
+                if ' x ' in texto or ' vs ' in texto:
+                    partes = re.split(r' x | vs ', texto)
+                    if len(partes) >= 2:
+                        # Limpa caracteres estranhos e pega nomes curtos
+                        casa = partes[0].split()[-1] if len(partes[0].split()) > 0 else "Casa"
+                        # Lógica simples para pegar nomes (pode precisar ajuste dependendo do site)
+                        # Como fallback, pegamos a linha inteira como "Jogo"
+                        jogos.append({
+                            "Liga": "Lista O Tempo",
+                            "Jogo_Completo": texto, # Salva a linha toda para garantir
+                            "Search_Key": texto.lower()
+                        })
         except Exception as e:
             print(f"Fonte 2 falhou: {e}")
 
@@ -95,10 +95,9 @@ def conectar_gsheets():
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
-        # Abre a aba 'Registros'
         return client.open("ControlBET").worksheet("Registros")
     except gspread.exceptions.WorksheetNotFound:
-        st.error("🚨 ERRO CRÍTICO: Não encontrei a aba 'Registros' na planilha. Renomeie lá!")
+        st.error("🚨 ERRO: Não encontrei a aba 'Registros'.")
         return None
     except Exception as e:
         st.error(f"Erro de conexão: {e}")
@@ -113,14 +112,14 @@ def salvar_registro(dados):
     sheet = conectar_gsheets()
     if sheet:
         sheet.append_row(dados)
-        st.toast("✅ Aposta Salva!", icon="💾")
+        st.toast("✅ Aposta Registrada!", icon="🚀")
         st.cache_data.clear()
         st.rerun()
 
 # --- LÓGICA PRINCIPAL ---
 st.title("📊 Gestão Profissional")
 
-# Inicializa variaveis de sessão
+# Session State
 if 'form_liga' not in st.session_state: st.session_state.form_liga = ""
 if 'form_jogo' not in st.session_state: st.session_state.form_jogo = ""
 
@@ -130,27 +129,28 @@ with st.expander("🔍 **Localizar Jogo Automaticamente**", expanded=True):
     termo_busca = c_search1.text_input("Digite o time:", placeholder="Ex: Flamengo")
     
     if c_search2.button("Buscar Jogo"):
-        with st.spinner("Varrendo sites de estatística..."):
+        with st.spinner("Buscando em sites acessíveis..."):
             df_jogos = buscar_jogos_do_dia()
             
             if not df_jogos.empty and termo_busca:
+                # Busca 'fuzzy' (aproximada) simples
                 res = df_jogos[df_jogos['Search_Key'].str.contains(termo_busca.lower())]
                 
                 if len(res) >= 1:
-                    # Pega o primeiro resultado
                     jogo_ok = res.iloc[0]
                     st.session_state.form_liga = jogo_ok['Liga']
                     st.session_state.form_jogo = jogo_ok['Jogo_Completo']
-                    st.success(f"✅ Jogo carregado: {jogo_ok['Jogo_Completo']}")
+                    st.success(f"✅ Encontrado: {jogo_ok['Jogo_Completo']}")
                     st.rerun()
                 else:
-                    st.error(f"❌ Não achei '{termo_busca}' nos jogos de hoje.")
+                    st.warning(f"❌ Não achei '{termo_busca}' nas listas de hoje.")
+                    st.caption("Nota: Tente digitar apenas o nome principal do time.")
             elif termo_busca == "":
-                st.warning("Digite um nome para buscar.")
+                st.warning("Digite o nome do time.")
             else:
-                st.error("⚠️ O sistema de busca está indisponível no momento (Bloqueio externo). Preencha manualmente.")
+                st.error("⚠️ Não consegui acessar as fontes de dados no momento. Preencha manualmente.")
 
-# --- DASHBOARD (MÉTRICAS) ---
+# --- DASHBOARD ---
 df = carregar_dados()
 banca_inicial = 100.00
 saldo_atual = banca_inicial
@@ -166,11 +166,9 @@ if not df.empty:
     col1.metric("Banca Atual", f"R$ {saldo_atual:.2f}", delta=f"{lucro_total:.2f}")
     col2.metric("Entradas", len(df))
     
-    # ROI
     roi = (lucro_total / df['Valor_Entrada'].sum() * 100) if df['Valor_Entrada'].sum() > 0 else 0
     col3.metric("ROI", f"{roi:.2f}%")
     
-    # Winrate
     fechadas = df[df['Resultado'].isin(['Green', 'Red'])]
     qtd = len(fechadas)
     greens = len(fechadas[fechadas['Resultado'] == 'Green'])
@@ -179,7 +177,7 @@ if not df.empty:
 
 st.divider()
 
-# --- FORMULÁRIO DE REGISTRO ---
+# --- FORMULÁRIO ---
 st.subheader("📝 Registrar Nova Entrada")
 
 with st.container(border=True):
