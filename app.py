@@ -6,87 +6,88 @@ from datetime import datetime, date
 import plotly.express as px
 import cloudscraper
 from bs4 import BeautifulSoup
-import re
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="Gestão Profissional", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="Gestão de Banca Pro", page_icon="⚽", layout="wide")
 
-# --- CSS Personalizado ---
+# --- CSS Otimizado ---
 st.markdown("""
 <style>
     .block-container {padding-top: 1rem;}
-    div[data-testid="stMetricValue"] {font-size: 24px;}
-    .stButton button {width: 100%; border-radius: 5px; font-weight: bold;}
+    div[data-testid="stMetricValue"] {font-size: 26px; font-weight: bold;}
+    .stButton button {width: 100%; border-radius: 8px; font-weight: bold; height: 3em;}
+    input[type=number] {font-weight: bold; color: #4caf50;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. ROBÔ DE BUSCA (Estratégia "Sites Leves") ---
-@st.cache_data(ttl=3600)
-def buscar_jogos_do_dia():
-    """Busca jogos em sites com menos proteção anti-bot"""
+# --- 1. ROBÔ DE BUSCA (Alvo: JogosDeHojeNaTV) ---
+@st.cache_data(ttl=1800) # Cache de 30 minutos
+def buscar_jogos_tv():
+    """Busca jogos especificamente no site jogosdehojenatv.com.br"""
     jogos = []
-    scraper = cloudscraper.create_scraper()
+    scraper = cloudscraper.create_scraper() # Disfarce de navegador
     
-    # --- FONTE 1: JogosDeHoje.org (Site leve, alta taxa de sucesso) ---
+    url = "https://www.jogosdehojenatv.com.br/"
+    
     try:
-        url = "https://www.jogosdehoje.org"
         response = scraper.get(url)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
-            # Procura por cartões de jogos
-            cards = soup.find_all('div', class_='match-card')
             
-            for card in cards:
-                try:
-                    # Tenta extrair nomes
-                    times = card.find_all('span', class_='team-name')
-                    if len(times) >= 2:
-                        casa = times[0].get_text(strip=True)
-                        fora = times[1].get_text(strip=True)
-                        
-                        # Tenta liga
-                        liga = "Jogos de Hoje"
-                        header = card.find_previous('h3')
-                        if header: liga = header.get_text(strip=True)
-
-                        jogos.append({
-                            "Liga": liga,
-                            "Jogo_Completo": f"{casa} x {fora}",
-                            "Search_Key": f"{casa} {fora}".lower()
-                        })
-                except: continue
-    except Exception as e:
-        print(f"Fonte 1 falhou: {e}")
-
-    # --- FONTE 2: O Tempo (Portal de Notícias - Backup) ---
-    if not jogos:
-        try:
-            url_reserva = "https://www.otempo.com.br/sports/futebol/jogos-de-hoje"
-            response = scraper.get(url_reserva)
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # O site geralmente organiza em listas ou divs. 
+            # Vamos procurar elementos que contêm informações de partidas.
+            # Estratégia Genérica para esse site: procurar linhas com horário e times
             
-            # Varredura genérica em tabelas
-            linhas = soup.find_all('tr')
+            # Tenta encontrar os containers de jogos (a estrutura pode variar, então buscamos amplo)
+            linhas = soup.find_all(['li', 'div'], class_=lambda x: x and ('game' in x or 'partida' in x or 'list' in x))
+            
+            # Se não achar por classe, pega todas as listas
+            if not linhas:
+                linhas = soup.find_all('li')
+
             for linha in linhas:
                 texto = linha.get_text(" ", strip=True)
-                # Procura padrão "Time A x Time B" ou "Time A vs Time B"
+                
+                # Verifica se tem cara de jogo (tem " x " ou " vs " e um horário no começo)
                 if ' x ' in texto or ' vs ' in texto:
-                    partes = re.split(r' x | vs ', texto)
-                    if len(partes) >= 2:
-                        # Limpa caracteres estranhos e pega nomes curtos
-                        casa = partes[0].split()[-1] if len(partes[0].split()) > 0 else "Casa"
-                        # Lógica simples para pegar nomes (pode precisar ajuste dependendo do site)
-                        # Como fallback, pegamos a linha inteira como "Jogo"
-                        jogos.append({
-                            "Liga": "Lista O Tempo",
-                            "Jogo_Completo": texto, # Salva a linha toda para garantir
-                            "Search_Key": texto.lower()
-                        })
-        except Exception as e:
-            print(f"Fonte 2 falhou: {e}")
+                    # Tenta limpar o texto para pegar os times
+                    # Exemplo de texto: "15:00 Campeonato Inglês: Time A x Time B ESPN"
+                    
+                    # Separa campeonato (geralmente antes dos times)
+                    liga = "Futebol TV"
+                    partes = texto.split(':')
+                    
+                    # Tentativa de extrair dados
+                    nome_jogo = texto # Padrão
+                    
+                    # Se tiver separador de hora (ex: 15:00 ...)
+                    if len(partes) > 1:
+                        # Pega o pedaço que tem o " x "
+                        for pedaco in partes:
+                            if ' x ' in pedaco:
+                                nome_jogo = pedaco.strip()
+                                # Remove o nome do canal de TV do final se tiver
+                                nome_jogo = nome_jogo.split(' ao vivo')[0]
+                                break
+                    
+                    jogos.append({
+                        "Liga": liga,
+                        "Jogo_Completo": nome_jogo,
+                        "Search_Key": nome_jogo.lower()
+                    })
+        else:
+            print(f"Site retornou código: {response.status_code}")
+            
+    except Exception as e:
+        print(f"Erro no scraper: {e}")
 
-    return pd.DataFrame(jogos)
+    # Remove duplicatas
+    df = pd.DataFrame(jogos)
+    if not df.empty:
+        df = df.drop_duplicates(subset=['Search_Key'])
+    
+    return df
 
 # --- 2. Conexão Google Sheets ---
 def conectar_gsheets():
@@ -96,11 +97,8 @@ def conectar_gsheets():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         return client.open("ControlBET").worksheet("Registros")
-    except gspread.exceptions.WorksheetNotFound:
-        st.error("🚨 ERRO: Não encontrei a aba 'Registros'.")
-        return None
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        st.error(f"Erro de conexão (Planilha): {e}")
         return None
 
 def carregar_dados():
@@ -112,55 +110,55 @@ def salvar_registro(dados):
     sheet = conectar_gsheets()
     if sheet:
         sheet.append_row(dados)
-        st.toast("✅ Aposta Registrada!", icon="🚀")
+        st.toast("✅ Aposta Registrada!", icon="💰")
         st.cache_data.clear()
         st.rerun()
 
 # --- LÓGICA PRINCIPAL ---
-st.title("📊 Gestão Profissional")
+st.title("💼 Gestão de Banca Profissional")
 
-# Session State
+# Session State para preencher campos
 if 'form_liga' not in st.session_state: st.session_state.form_liga = ""
 if 'form_jogo' not in st.session_state: st.session_state.form_jogo = ""
 
-# --- ÁREA DE BUSCA (TOPO) ---
-with st.expander("🔍 **Localizar Jogo Automaticamente**", expanded=True):
-    c_search1, c_search2 = st.columns([3, 1])
-    termo_busca = c_search1.text_input("Digite o time:", placeholder="Ex: Flamengo")
+# --- ÁREA DE BUSCA (Apedidos: JogosDeHojeNaTV) ---
+with st.expander("🔍 **Localizar Jogo (Busca Automática)**", expanded=True):
+    c1, c2 = st.columns([3, 1])
+    termo_busca = c1.text_input("Digite o time:", placeholder="Ex: Flamengo")
     
-    if c_search2.button("Buscar Jogo"):
-        with st.spinner("Buscando em sites acessíveis..."):
-            df_jogos = buscar_jogos_do_dia()
+    if c2.button("Buscar Jogo"):
+        with st.spinner("Consultando jogosdehojenatv.com.br..."):
+            df_jogos = buscar_jogos_tv()
             
             if not df_jogos.empty and termo_busca:
-                # Busca 'fuzzy' (aproximada) simples
+                # Filtra
                 res = df_jogos[df_jogos['Search_Key'].str.contains(termo_busca.lower())]
                 
                 if len(res) >= 1:
                     jogo_ok = res.iloc[0]
-                    st.session_state.form_liga = jogo_ok['Liga']
                     st.session_state.form_jogo = jogo_ok['Jogo_Completo']
-                    st.success(f"✅ Encontrado: {jogo_ok['Jogo_Completo']}")
+                    st.session_state.form_liga = "Jogos de Hoje" # O site mistura ligas, definimos genérico
+                    st.success(f"✅ Achei: {jogo_ok['Jogo_Completo']}")
                     st.rerun()
                 else:
-                    st.warning(f"❌ Não achei '{termo_busca}' nas listas de hoje.")
-                    st.caption("Nota: Tente digitar apenas o nome principal do time.")
+                    st.warning(f"O time '{termo_busca}' não aparece na lista de hoje da TV.")
             elif termo_busca == "":
                 st.warning("Digite o nome do time.")
             else:
-                st.error("⚠️ Não consegui acessar as fontes de dados no momento. Preencha manualmente.")
+                st.error("Não consegui ler a lista do site agora. Ele pode estar bloqueando acessos de nuvem.")
 
 # --- DASHBOARD ---
 df = carregar_dados()
 banca_inicial = 100.00
 saldo_atual = banca_inicial
+lucro_total = 0.0
 
 if not df.empty:
-    df['Lucro_Real'] = pd.to_numeric(df['Lucro_Real'], errors='coerce').fillna(0)
-    df['Valor_Entrada'] = pd.to_numeric(df['Valor_Entrada'], errors='coerce').fillna(0)
+    for col in ['Lucro_Real', 'Valor_Entrada']:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     lucro_total = df['Lucro_Real'].sum()
-    saldo_atual = banca_inicial + lucro_total
+    saldo_atual += lucro_total
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Banca Atual", f"R$ {saldo_atual:.2f}", delta=f"{lucro_total:.2f}")
@@ -171,14 +169,13 @@ if not df.empty:
     
     fechadas = df[df['Resultado'].isin(['Green', 'Red'])]
     qtd = len(fechadas)
-    greens = len(fechadas[fechadas['Resultado'] == 'Green'])
-    wr = (greens / qtd * 100) if qtd > 0 else 0
-    col4.metric("Winrate", f"{wr:.1f}%")
+    winrate = (len(fechadas[fechadas['Resultado'] == 'Green']) / qtd * 100) if qtd > 0 else 0
+    col4.metric("Winrate", f"{winrate:.1f}%")
 
 st.divider()
 
 # --- FORMULÁRIO ---
-st.subheader("📝 Registrar Nova Entrada")
+st.subheader("📝 Nova Entrada")
 
 with st.container(border=True):
     # Finanças
@@ -188,7 +185,9 @@ with st.container(border=True):
     
     odd_calc = 0.0
     if valor_entrada > 0: odd_calc = valor_retorno / valor_entrada
-    cf3.text_input("Odd Calculada", value=f"{odd_calc:.3f}", disabled=True)
+    
+    with cf3:
+        st.markdown(f"<div style='background:#f0f2f6;padding:10px;text-align:center;border-radius:5px'><b>Odd: {odd_calc:.3f}</b></div>", unsafe_allow_html=True)
 
     # Detalhes
     cd1, cd2, cd3 = st.columns(3)
@@ -198,11 +197,11 @@ with st.container(border=True):
 
     # Opções
     co1, co2, co3 = st.columns(3)
-    mercado_input = co1.selectbox("Mercado", ["Match Odds", "Over Gols", "Under Gols", "Handicap", "Ambas Marcam", "Outros"])
+    mercado_input = co1.selectbox("Mercado", ["Match Odds", "Over 0.5 HT", "Over 1.5/2.5", "Under Gols", "Ambas Marcam", "Handicap", "Outro"])
     resultado_input = co2.selectbox("Resultado", ["Pendente", "Green", "Red", "Reembolso"])
-    obs_input = co3.text_input("Obs / Método")
+    obs_input = co3.text_input("Obs")
 
-    if st.button("💾 Salvar na Planilha", type="primary"):
+    if st.button("💾 CONFIRMAR REGISTRO", type="primary"):
         if valor_entrada > 0 and jogo_input:
             lucro_final = 0.0
             if resultado_input == "Green": lucro_final = valor_retorno - valor_entrada
@@ -221,10 +220,10 @@ with st.container(border=True):
 # --- HISTÓRICO ---
 if not df.empty:
     st.divider()
-    tab1, tab2 = st.tabs(["Histórico", "Gráfico"])
-    with tab1:
+    t1, t2 = st.tabs(["Histórico", "Gráfico"])
+    with t1:
         st.dataframe(df.iloc[::-1], use_container_width=True)
-    with tab2:
-        df_g = df.copy()
-        df_g['Acumulado'] = banca_inicial + df_g['Lucro_Real'].cumsum()
-        st.plotly_chart(px.line(df_g, y='Acumulado', markers=True), use_container_width=True)
+    with t2:
+        dfig = df.copy()
+        dfig['Saldo'] = banca_inicial + dfig['Lucro_Real'].cumsum()
+        st.plotly_chart(px.line(dfig, y='Saldo', markers=True), use_container_width=True)
