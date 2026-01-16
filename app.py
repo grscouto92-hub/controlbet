@@ -8,19 +8,21 @@ import plotly.express as px
 # --- Configuração da Página ---
 st.set_page_config(page_title="Gestão de Banca Pro", page_icon="📈", layout="wide")
 
-# --- CSS Otimizado ---
+# --- CSS Otimizado (Visual Limpo) ---
 st.markdown("""
 <style>
     .block-container {padding-top: 1rem;}
     div[data-testid="stMetricValue"] {font-size: 26px; font-weight: bold;}
     .stButton button {width: 100%; border-radius: 8px; font-weight: bold; height: 3em;}
+    /* Estilo do Botão de Link */
     a.link-btn {
-        text-decoration: none; padding: 10px 20px; color: white !important;
-        background-color: #262730; border-radius: 5px; border: 1px solid #4caf50;
-        display: inline-block; text-align: center; width: 100%;
-        font-weight: bold; transition: 0.3s;
+        text-decoration: none; padding: 12px 20px; color: white !important;
+        background-color: #374df5; /* Azul SofaScore */
+        border-radius: 8px; border: 1px solid #374df5;
+        display: block; text-align: center; width: 100%;
+        font-weight: bold; font-size: 16px; transition: 0.3s;
     }
-    a.link-btn:hover {background-color: #4caf50; border-color: #4caf50;}
+    a.link-btn:hover {background-color: #2b3bb5; border-color: #2b3bb5;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -33,13 +35,12 @@ LIGAS_COMUNS = [
 
 MERCADOS_COMUNS = [
     "Match Odds (Vencedor)", "Over 1.5 Gols", "Over 2.5 Gols", "Over 0.5 HT",
-    "Under 2.5 Gols", "Ambas Marcam", "Handicap Asiático", "Empate Anula"
+    "Under 2.5 Gols", "Ambas Marcam", "Handicap Asiático", "Empate Anula", "Outro"
 ]
 
 # --- CONEXÃO GOOGLE SHEETS ---
 def conectar_gsheets():
     try:
-        # Se estiver rodando local e não tiver secrets, avisa
         if "gcp_service_account" not in st.secrets:
             st.error("⚠️ Configuração de credenciais do Google não encontrada.")
             return None
@@ -86,28 +87,20 @@ if not df.empty:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Banca Atual", f"R$ {saldo_atual:.2f}", delta=f"{lucro_total:.2f}")
     
-    total_entradas = len(df)
     roi = (lucro_total / df['Valor_Entrada'].sum() * 100) if df['Valor_Entrada'].sum() > 0 else 0.0
-    c2.metric("ROI (Retorno)", f"{roi:.2f}%")
+    c2.metric("ROI", f"{roi:.2f}%")
     
     resolvidas = df[df['Resultado'].isin(['Green', 'Red'])]
     winrate = (len(resolvidas[resolvidas['Resultado']=='Green']) / len(resolvidas) * 100) if not resolvidas.empty else 0
     c3.metric("Winrate", f"{winrate:.1f}%")
-    c4.metric("Entradas", total_entradas)
+    c4.metric("Entradas", len(df))
 
 st.divider()
 
-# 2. ÁREA DE CONSULTA RÁPIDA (Magic Links)
-st.subheader("🔍 Consultar Jogos de Hoje")
-st.markdown("Clique para abrir a lista de jogos do dia em sites confiáveis:")
-
-col_link1, col_link2, col_link3 = st.columns(3)
-with col_link1:
-    st.markdown(f'<a href="https://www.uol.com.br/esporte/futebol/jogos-de-hoje/" target="_blank" class="link-btn">⚽ Ver no UOL</a>', unsafe_allow_html=True)
-with col_link2:
-    st.markdown(f'<a href="https://www.sofascore.com/pt/" target="_blank" class="link-btn">📊 Ver no SofaScore</a>', unsafe_allow_html=True)
-with col_link3:
-    st.markdown(f'<a href="https://onefootball.com/pt-br/jogos" target="_blank" class="link-btn">📱 Ver no OneFootball</a>', unsafe_allow_html=True)
+# 2. ÁREA DE CONSULTA RÁPIDA (SofaScore)
+col_btn, col_vazia = st.columns([1, 2]) # Botão ocupa 1/3 da tela para não ficar gigante
+with col_btn:
+    st.markdown(f'<a href="https://www.sofascore.com/pt/" target="_blank" class="link-btn">📊 Abrir SofaScore (Jogos de Hoje)</a>', unsafe_allow_html=True)
 
 st.divider()
 
