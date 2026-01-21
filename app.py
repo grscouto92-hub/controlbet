@@ -188,4 +188,61 @@ if not df.empty:
                 col_topo1.markdown(f"**⚽ {row['Jogo']}**")
                 col_topo1.caption(f"{row['Data']} • {row['Mercado']}")
                 col_topo2.markdown(f"**R$ {row['Valor_Entrada']}**")
-                col_topo2.caption(f"
+                col_topo2.caption(f"Odd: {row['Odd_Calc']}")
+                
+                st.write("") # Espaço vazio
+                
+                # BOTÕES DE AÇÃO (LADO A LADO FORÇADO PELO CSS)
+                c_green, c_red, c_refund = st.columns([1, 1, 1], gap="small")
+                
+                # Botão Green (Estilo Injetado)
+                with c_green:
+                    # CSS Específico para este botão ficar Verde
+                    st.markdown('<style>div.stButton > button:first-child {background-color: #e8f5e9; color: #2e7d32; border-color: #2e7d32;}</style>', unsafe_allow_html=True)
+                    if st.button("✅ Green", key=f"g_{index}"):
+                        lucro = row['Valor_Retorno'] - row['Valor_Entrada']
+                        atualizar_status(index, "Green", lucro)
+                
+                # Botão Red (Estilo Injetado)
+                with c_red:
+                    # CSS Específico para este botão ficar Vermelho
+                    st.markdown('<style>div.stButton > button:first-child {background-color: #ffebee; color: #c62828; border-color: #c62828;}</style>', unsafe_allow_html=True)
+                    if st.button("❌ Red", key=f"r_{index}"):
+                        lucro = -row['Valor_Entrada']
+                        atualizar_status(index, "Red", lucro)
+
+                # Botão Reembolso (Estilo Injetado)
+                with c_refund:
+                     # CSS Específico para este botão ficar Cinza
+                    st.markdown('<style>div.stButton > button:first-child {background-color: #f5f5f5; color: #616161; border-color: #9e9e9e;}</style>', unsafe_allow_html=True)
+                    if st.button("🔄 Nula", key=f"re_{index}"):
+                        atualizar_status(index, "Reembolso", 0.0)
+
+    # ABA HISTÓRICO
+    with tab_hist:
+        for index, row in df.sort_index(ascending=False).iterrows():
+            status = row['Resultado']
+            cor_card = "gray"
+            if status == "Green": cor_card = "green"
+            elif status == "Red": cor_card = "red"
+            
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
+                c1.markdown(f"**{row['Jogo']}**")
+                c1.caption(f"{row['Data']} • {row['Mercado']}")
+                
+                lucro_show = row['Lucro_Real']
+                if status == "Green":
+                    c2.markdown(f"<span style='color:green; font-weight:bold'>+R$ {lucro_show:.2f}</span>", unsafe_allow_html=True)
+                elif status == "Red":
+                    c2.markdown(f"<span style='color:red; font-weight:bold'>-R$ {abs(lucro_show):.2f}</span>", unsafe_allow_html=True)
+                else:
+                    c2.info(status)
+
+    # ABA GRÁFICO
+    with tab_graf:
+        df_g = df.copy()
+        df_g['Saldo'] = banca_inicial + df_g['Lucro_Real'].cumsum()
+        fig = px.line(df_g, y='Saldo', markers=True, title="Crescimento")
+        fig.update_layout(xaxis_title=None, yaxis_title="Banca R$")
+        st.plotly_chart(fig, use_container_width=True)
