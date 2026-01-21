@@ -8,30 +8,46 @@ import plotly.express as px
 # --- Configuração da Página ---
 st.set_page_config(page_title="Gestão de Banca Pro", page_icon="📈", layout="centered")
 
-# --- CSS Otimizado ---
+# --- CSS Otimizado (Visual e Layout) ---
 st.markdown("""
 <style>
-    .block-container {padding-top: 1rem;}
-    div[data-testid="stMetricValue"] {font-size: 26px; font-weight: bold;}
-    .stButton button {width: 100%; border-radius: 8px; font-weight: bold; height: 3em;}
+    /* Ajuste de Espaçamento Geral */
+    .block-container {padding-top: 1rem; padding-bottom: 2rem;}
     
-    /* Botão Link SofaScore */
+    /* Estilo do Botão de Link (SofaScore) */
     a.link-btn {
         text-decoration: none; padding: 12px 20px; color: white !important;
         background-color: #374df5; border-radius: 8px; border: 1px solid #374df5;
         display: block; text-align: center; width: 100%;
         font-weight: bold; font-size: 16px; transition: 0.3s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     a.link-btn:hover {background-color: #2b3bb5; border-color: #2b3bb5;}
 
-    /* Cores Específicas para os Botões dos Cards */
-    div[data-testid="column"] button:contains("✅") {background-color: #dbfadd; color: #1b5e20; border: 1px solid #1b5e20;}
-    div[data-testid="column"] button:contains("❌") {background-color: #ffebee; color: #b71c1c; border: 1px solid #b71c1c;}
-    div[data-testid="column"] button:contains("🔄") {background-color: #f5f5f5; color: #616161; border: 1px solid #616161;}
+    /* --- TRUQUE PARA FORÇAR BOTÕES LADO A LADO NO MOBILE --- */
+    /* Isso força as colunas a não empilharem em telas pequenas */
+    [data-testid="column"] {
+        width: calc(33.3% - 1rem) !important;
+        flex: 1 1 calc(33.3% - 1rem) !important;
+        min-width: 33.3% !important;
+    }
+
+    /* Estilo Geral dos Botões */
+    .stButton button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 700;
+        height: 3em;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+
+    /* Cores Específicas para os Botões (Baseado no Texto/Emoji) */
+    /* Como não podemos colocar ID no botão, estilizamos todos e usamos o python para diferenciar o container */
 </style>
 """, unsafe_allow_html=True)
 
-# --- LISTAS ---
+# --- LISTAS PRONTAS ---
 LIGAS_COMUNS = [
     "Brasileirão Série A", "Brasileirão Série B", "Copa do Brasil",
     "Premier League (ING)", "La Liga (ESP)", "Serie A (ITA)", "Bundesliga (ALE)",
@@ -71,28 +87,23 @@ def salvar_registro(dados):
         st.cache_data.clear()
         st.rerun()
 
-# --- NOVA FUNÇÃO: ATUALIZAR STATUS PELO CARD ---
+# --- ATUALIZAR STATUS ---
 def atualizar_status(indice_df, novo_resultado, lucro_calculado):
     sheet = conectar_gsheets()
     if sheet:
-        # O índice do DataFrame começa em 0.
-        # No Google Sheets: Linha 1 é cabeçalho.
-        # Então índice 0 do DF = Linha 2 do Sheets.
+        # Ajuste de índice: Linha 1 é cabeçalho + índice começa em 0 = Linha + 2
         numero_linha = indice_df + 2 
+        # Colunas H(8) e I(9). Se mudar a ordem na planilha, mude aqui.
+        sheet.update_cell(numero_linha, 8, novo_resultado)
+        sheet.update_cell(numero_linha, 9, lucro_calculado)
         
-        # Atualiza Coluna H (8) = Resultado e Coluna I (9) = Lucro_Real
-        # Nota: Se você mudou a ordem das colunas, ajuste os números abaixo
-        sheet.update_cell(numero_linha, 8, novo_resultado) # Coluna H
-        sheet.update_cell(numero_linha, 9, lucro_calculado) # Coluna I
-        
-        st.toast(f"Aposta atualizada para {novo_resultado}!", icon="🔄")
+        st.toast(f"Atualizado para {novo_resultado}!", icon="🔄")
         st.cache_data.clear()
         st.rerun()
 
 # --- LÓGICA PRINCIPAL ---
 st.title("💼 Gestão de Banca Pro")
 
-# 1. Dados e KPIs
 df = carregar_dados()
 banca_inicial = 100.00
 saldo_atual = banca_inicial
@@ -105,9 +116,9 @@ if not df.empty:
     lucro_total = df['Lucro_Real'].sum()
     saldo_atual = banca_inicial + lucro_total
     
-    # KPIs Topo
+    # KPIs
     c1, c2, c3 = st.columns(3)
-    c1.metric("Banca Atual", f"R$ {saldo_atual:.2f}", delta=f"{lucro_total:.2f}")
+    c1.metric("Banca", f"R$ {saldo_atual:.2f}", delta=f"{lucro_total:.2f}")
     
     roi = (lucro_total / df['Valor_Entrada'].sum() * 100) if df['Valor_Entrada'].sum() > 0 else 0.0
     c2.metric("ROI", f"{roi:.2f}%")
@@ -118,26 +129,26 @@ if not df.empty:
 
 st.divider()
 
-# 2. Link SofaScore
+# Botão SofaScore
 col_btn, _ = st.columns([1, 1])
 with col_btn:
     st.markdown(f'<a href="https://www.sofascore.com/pt/" target="_blank" class="link-btn">📊 Abrir SofaScore</a>', unsafe_allow_html=True)
 
 st.divider()
 
-# 3. Formulário de Registro (Expander para economizar espaço)
+# Formulário (Sanfona Fechada por Padrão)
 with st.expander("📝 Registrar Nova Entrada", expanded=False):
     with st.form("form_registro"):
-        st.caption("💰 DADOS FINANCEIROS")
+        st.caption("💰 DADOS")
         cf1, cf2, cf3 = st.columns(3)
-        valor_entrada = cf1.number_input("Entrada (R$)", min_value=0.0, value=20.0, step=1.0)
-        valor_retorno = cf2.number_input("Retorno (R$)", min_value=0.0, value=28.0, step=1.0)
+        valor_entrada = cf1.number_input("Entrada (R$)", value=20.0, step=1.0)
+        valor_retorno = cf2.number_input("Retorno (R$)", value=28.0, step=1.0)
         
         odd_calc = 0.0
         if valor_entrada > 0: odd_calc = valor_retorno / valor_entrada
-        cf3.write(f"**Odd: {odd_calc:.3f}**")
+        cf3.markdown(f"<br><b>Odd: {odd_calc:.3f}</b>", unsafe_allow_html=True)
 
-        st.caption("⚽ DADOS DO JOGO")
+        st.caption("⚽ JOGO")
         cd1, cd2 = st.columns(2)
         liga_sel = cd1.selectbox("Liga", LIGAS_COMUNS)
         jogo_txt = cd2.text_input("Jogo", placeholder="Ex: Fla x Vasco")
@@ -147,7 +158,6 @@ with st.expander("📝 Registrar Nova Entrada", expanded=False):
         mercado_sel = cm2.selectbox("Mercado", MERCADOS_COMUNS)
         obs_txt = st.text_input("Obs")
 
-        # Status inicial é sempre Pendente ao criar
         if st.form_submit_button("💾 Salvar Aposta"):
             if valor_entrada > 0 and jogo_txt:
                 salvar_registro([
@@ -158,74 +168,24 @@ with st.expander("📝 Registrar Nova Entrada", expanded=False):
             else:
                 st.warning("Preencha dados obrigatórios.")
 
-# 4. LISTA DE CARDS INTERATIVOS
+# --- LISTA DE CARDS ---
 st.subheader("📋 Minhas Apostas")
 
 if not df.empty:
-    tab_pendentes, tab_todos, tab_grafico = st.tabs(["⏳ Pendentes", "🗂️ Histórico", "📈 Gráfico"])
+    tab_pend, tab_hist, tab_graf = st.tabs(["⏳ Pendentes", "🗂️ Histórico", "📈 Gráfico"])
     
-    # --- ABA PENDENTES (CARDS INTERATIVOS) ---
-    with tab_pendentes:
-        # Filtra e ordena (Pendentes antigos primeiro, ou novos primeiro, a seu gosto)
+    # ABA PENDENTES (CARDS COLORIDOS E LADO A LADO)
+    with tab_pend:
         df_pendentes = df[df['Resultado'] == 'Pendente'].sort_index(ascending=False)
         
         if df_pendentes.empty:
-            st.info("Nenhuma aposta pendente. Bom trabalho!")
+            st.info("Tudo resolvido! Nenhuma pendência.")
         
         for index, row in df_pendentes.iterrows():
-            # Card Container
             with st.container(border=True):
-                # Cabeçalho do Card
+                # Cabeçalho
                 col_topo1, col_topo2 = st.columns([3, 1])
                 col_topo1.markdown(f"**⚽ {row['Jogo']}**")
-                col_topo1.caption(f"{row['Liga']} • {row['Data']}")
+                col_topo1.caption(f"{row['Data']} • {row['Mercado']}")
                 col_topo2.markdown(f"**R$ {row['Valor_Entrada']}**")
-                
-                st.text(f"M: {row['Mercado']} (@ {row['Odd_Calc']})")
-                
-                # Botões de Ação
-                c_green, c_red, c_refund = st.columns(3)
-                
-                # Lógica: Green (Lucro = Retorno - Entrada), Red (Lucro = -Entrada)
-                if c_green.button("✅ Green", key=f"g_{index}"):
-                    lucro = row['Valor_Retorno'] - row['Valor_Entrada']
-                    atualizar_status(index, "Green", lucro)
-                
-                if c_red.button("❌ Red", key=f"r_{index}"):
-                    lucro = -row['Valor_Entrada']
-                    atualizar_status(index, "Red", lucro)
-                    
-                if c_refund.button("🔄 Reembolso", key=f"re_{index}"):
-                    atualizar_status(index, "Reembolso", 0.0)
-
-    # --- ABA TODOS (HISTÓRICO GERAL) ---
-    with tab_todos:
-        # Mostra todos, ordenados do mais novo para o mais antigo
-        for index, row in df.sort_index(ascending=False).iterrows():
-            status = row['Resultado']
-            
-            # Define cor da borda lateral baseada no status
-            cor_status = "gray"
-            if status == "Green": cor_status = "green"
-            elif status == "Red": cor_status = "red"
-            elif status == "Pendente": cor_status = "orange"
-            
-            # Visual do Card Simples (Sem botões)
-            with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                c1.markdown(f"**{row['Jogo']}**")
-                c1.caption(f"{row['Data']} | {row['Mercado']}")
-                
-                saldo_txt = f"R$ {row['Lucro_Real']:.2f}"
-                if status == "Green": 
-                    c2.success(saldo_txt)
-                elif status == "Red": 
-                    c2.error(saldo_txt)
-                else:
-                    c2.info(status)
-
-    # --- ABA GRÁFICO ---
-    with tab_grafico:
-        df_g = df.copy()
-        df_g['Saldo'] = banca_inicial + df_g['Lucro_Real'].cumsum()
-        st.plotly_chart(px.line(df_g, y='Saldo', markers=True), use_container_width=True)
+                col_topo2.caption(f"
