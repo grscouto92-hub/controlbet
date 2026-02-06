@@ -3,79 +3,95 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
-import plotly.express as px
 
 # --- Configuração da Página ---
 st.set_page_config(page_title="Gestão Pro", page_icon="🦁", layout="centered")
 
-# --- CSS PERSONALIZADO (Dark Mode & Cards Estilo App) ---
+# --- CSS ULTRA PRO (Dark Mode & Botões Horizontais) ---
 st.markdown("""
 <style>
-    /* Fundo Geral */
-    .stApp { background-color: #0e1117; color: white; }
+    /* Fundo escuro e fontes */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
     
-    /* Container do Card */
+    html, body, [data-testid="stAppViewContainer"] {
+        background-color: #0b0e11;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Container Principal do Card */
     .card-bet {
-        background-color: #161b22;
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid #30363d;
-        margin-bottom: 15px;
+        background-color: #1e2329;
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 12px;
+        border: 1px solid #2b3139;
     }
 
-    /* Badge "AO VIVO" ou "SIMPLES" */
-    .badge {
-        background-color: #00c805;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 5px;
+    /* Badges Superiores */
+    .badge-container { display: flex; gap: 6px; margin-bottom: 10px; }
+    .badge-item {
         font-size: 10px;
-        font-weight: bold;
-        margin-right: 5px;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
     }
+    .badge-simples { background-color: #2b3139; color: #929aa5; }
+    .badge-aovivo { background-color: #00c087; color: #ffffff; }
 
-    /* Texto do Jogo e Mercado */
-    .jogo-titulo { font-size: 20px; font-weight: bold; margin-top: 10px; color: #ffffff; }
-    .mercado-sub { font-size: 16px; color: #8b949e; margin-bottom: 15px; }
+    /* Títulos */
+    .jogo-titulo { font-size: 19px; font-weight: 700; color: #ffffff; margin-bottom: 2px; }
+    .mercado-sub { font-size: 14px; color: #929aa5; margin-bottom: 16px; }
 
-    /* Caixa de Valores (O retângulo interno cinza) */
+    /* Caixa de Valores Branca (Estilo App) */
     .info-box {
-        background-color: #f0f2f5;
-        border-radius: 10px;
+        background-color: #ffffff;
+        border-radius: 12px;
         padding: 12px;
         display: flex;
         justify-content: space-between;
-        margin-bottom: 20px;
-        color: #1f2328;
+        margin-bottom: 16px;
     }
-    .info-item { text-align: left; }
-    .info-label { font-size: 11px; color: #656d76; text-transform: uppercase; font-weight: bold; }
-    .info-value { font-size: 15px; font-weight: 800; color: #1f2328; }
-
-    /* Estilização dos Botões Estilo Imagem */
-    div.stButton > button {
-        border-radius: 8px !important;
-        height: 45px !important;
-        font-weight: bold !important;
-        border: none !important;
-    }
+    .info-column { text-align: left; flex: 1; }
+    .info-column:not(:last-child) { border-right: 1px solid #eaecf0; margin-right: 10px; }
     
-    /* Botão WIN (Verde) */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-        background-color: #008134 !important; color: white !important;
+    .info-label { font-size: 10px; color: #707a8a; font-weight: 700; margin-bottom: 4px; }
+    .info-value { font-size: 15px; color: #1e2329; font-weight: 800; }
+
+    /* BOTÕES LADO A LADO - Forçando o Streamlit */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
     }
-    /* Botão LOSS (Vermelho) */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-        background-color: #e82a39 !important; color: white !important;
+
+    button {
+        height: 42px !important;
+        border-radius: 10px !important;
+        border: none !important;
+        font-weight: 700 !important;
+        font-size: 13px !important;
     }
-    /* Botão NULA (Cinza) */
-    div[data-testid="stHorizontalBlock"] > div:nth-child(3) button {
-        background-color: #6e7681 !important; color: white !important;
+
+    /* Customização de Cores dos Botões via Ordem */
+    /* WIN */
+    div[data-testid="stHorizontalBlock"] div:nth-child(1) button {
+        background-color: #0ecb81 !important; color: white !important;
+    }
+    /* LOSS */
+    div[data-testid="stHorizontalBlock"] div:nth-child(2) button {
+        background-color: #f6465d !important; color: white !important;
+    }
+    /* NULA */
+    div[data-testid="stHorizontalBlock"] div:nth-child(3) button {
+        background-color: #474d57 !important; color: white !important;
+    }
+    /* DELETE */
+    div[data-testid="stHorizontalBlock"] div:nth-child(4) button {
+        background-color: transparent !important; color: #929aa5 !important; border: 1px solid #474d57 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE DADOS (Conforme os passos anteriores) ---
+# --- FUNÇÕES DE DADOS (Conectando ao Sheets) ---
 def conectar_gsheets():
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -90,12 +106,12 @@ def carregar_dados():
     if sheet: return pd.DataFrame(sheet.get_all_records())
     return pd.DataFrame()
 
-def atualizar_status(indice_df, novo_resultado, lucro_calculado):
+def atualizar_status(indice_df, resultado, lucro):
     sheet = conectar_gsheets()
     if sheet:
         linha = int(indice_df) + 2
-        sheet.update_cell(linha, 8, novo_resultado)
-        sheet.update_cell(linha, 9, float(lucro_calculado))
+        sheet.update_cell(linha, 8, resultado)
+        sheet.update_cell(linha, 9, float(lucro))
         st.cache_data.clear()
         st.rerun()
 
@@ -107,100 +123,107 @@ def deletar_registro(indice_df):
         st.rerun()
 
 # --- INTERFACE PRINCIPAL ---
+st.markdown("<h2 style='color:white; margin-bottom:20px;'>Apostas 🦁</h2>", unsafe_allow_html=True)
+
 df = carregar_dados()
-st.title("Apostas 🦁")
 
 if not df.empty:
-    tab1, tab2 = st.tabs(["⌛ Ativo", "🗂️ Todos"])
+    tab_ativo, tab_historico = st.tabs(["⏳ Ativo", "🗂️ Histórico"])
 
-    with tab1:
+    with tab_ativo:
         df_pend = df[df['Resultado'] == 'Pendente'].sort_index(ascending=False)
         
+        if df_pend.empty:
+            st.info("Nenhuma aposta aberta.")
+        
         for index, row in df_pend.iterrows():
-            # Renderização do Card HTML personalizado
+            # Card Visual
             st.markdown(f"""
             <div class="card-bet">
-                <div>
-                    <span class="badge" style="background-color: #30363d;">✔️ SIMPLES</span>
-                    <span class="badge">AO VIVO</span>
+                <div class="badge-container">
+                    <div class="badge-item badge-simples">SIMPLES</div>
+                    <div class="badge-item badge-aovivo">AO VIVO</div>
                 </div>
                 <div class="jogo-titulo">{row['Jogo']}</div>
                 <div class="mercado-sub">{row['Mercado']}</div>
                 <div class="info-box">
-                    <div class="info-item">
-                        <div class="info-label">ODDS TOTAIS</div>
+                    <div class="info-column">
+                        <div class="info-label">ODDS</div>
                         <div class="info-value">{row['Odd_Calc']}</div>
                     </div>
-                    <div class="info-item">
+                    <div class="info-column">
                         <div class="info-label">APOSTA</div>
-                        <div class="info-value">{row['Valor_Entrada']} R$</div>
+                        <div class="info-value">R$ {row['Valor_Entrada']}</div>
                     </div>
-                    <div class="info-item">
-                        <div class="info-label">PRÊMIO POT.</div>
-                        <div class="info-value">{row['Valor_Retorno']} R$</div>
+                    <div class="info-column">
+                        <div class="info-label">PRÊMIO</div>
+                        <div class="info-value">R$ {row['Valor_Retorno']}</div>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # Botões de Ação (Abaixo do Card)
-            c1, c2, c3, c4 = st.columns([1, 1, 1, 0.4])
-            with c1:
-                if st.button("✔ WIN", key=f"w_{index}"):
+            # Botões Lado a Lado (Aqui acontece a mágica do CSS acima)
+            btn_cols = st.columns([1, 1, 1, 0.4])
+            with btn_cols[0]:
+                if st.button("WIN", key=f"w{index}"):
                     atualizar_status(index, "Green", row['Valor_Retorno'] - row['Valor_Entrada'])
-            with c2:
-                if st.button("✖ LOSS", key=f"l_{index}"):
+            with btn_cols[1]:
+                if st.button("LOSS", key=f"l{index}"):
                     atualizar_status(index, "Red", -row['Valor_Entrada'])
-            with c3:
-                if st.button("NULA", key=f"n_{index}"):
-                    atualizar_status(index, "Reembolso", 0.0)
-            with c4:
-                if st.button("🗑️", key=f"d_{index}"):
+            with btn_cols[2]:
+                if st.button("NULA", key=f"n{index}"):
+                    atualizar_status(index, "Reembolso", 0)
+            with btn_cols[3]:
+                if st.button("🗑️", key=f"d{index}"):
                     deletar_registro(index)
-            st.markdown("<br>", unsafe_allow_html=True)
 
-    with tab2:
-        # Histórico (Estilo similar mas sem botões de resultado)
+    with tab_historico:
+        # Repete o estilo para o histórico mas com o Lucro Real em destaque
         df_hist = df[df['Resultado'] != 'Pendente'].sort_index(ascending=False)
         for index, row in df_hist.iterrows():
-            cor_res = "#00c805" if row['Resultado'] == "Green" else "#ff4b4b"
+            cor_lucro = "#0ecb81" if row['Resultado'] == "Green" else "#f6465d"
             st.markdown(f"""
             <div class="card-bet">
-                <div style="display: flex; justify-content: space-between;">
-                    <span class="badge" style="background-color: {cor_res}">{row['Resultado']}</span>
-                    <span style="color: #8b949e; font-size: 12px;">{row['Data']}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div class="badge-item" style="background-color:{cor_lucro}; color:white;">{row['Resultado']}</div>
+                    <div style="color:#929aa5; font-size:11px;">{row['Data']}</div>
                 </div>
                 <div class="jogo-titulo">{row['Jogo']}</div>
-                <div class="info-box" style="margin-top:15px;">
-                    <div class="info-item">
+                <div class="mercado-sub">{row['Mercado']}</div>
+                <div class="info-box" style="margin-bottom:0px;">
+                    <div class="info-column">
                         <div class="info-label">LUCRO REAL</div>
-                        <div class="info-value" style="color: {cor_res}">R$ {row['Lucro_Real']}</div>
+                        <div class="info-value" style="color:{cor_lucro}">R$ {row['Lucro_Real']}</div>
                     </div>
-                    <div class="info-item">
-                        <div class="info-label">MERCADO</div>
-                        <div class="info-value">{row['Mercado']}</div>
+                    <div class="info-column">
+                        <div class="info-label">ODD</div>
+                        <div class="info-value">{row['Odd_Calc']}</div>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("Excluir Registro", key=f"del_h_{index}", use_container_width=True):
+            if st.button("Remover do Histórico", key=f"delh{index}", use_container_width=True):
                 deletar_registro(index)
+            st.markdown("---")
 
 else:
-    st.info("Nenhuma aposta encontrada.")
+    st.warning("Planilha vazia ou não conectada.")
 
-# Formulário de Nova Aposta (Expander)
+# --- BARRA LATERAL (Entrada de Dados) ---
 with st.sidebar:
-    st.header("Nova Entrada")
-    with st.form("add_bet"):
-        jogo = st.text_input("Jogo")
-        liga = st.selectbox("Liga", ["Brasileirão", "Premier League", "Champions", "Outras"])
-        mercado = st.text_input("Mercado (Ex: Over 0.5 HT)")
-        entrada = st.number_input("Valor Entrada", value=10.0)
-        retorno = st.number_input("Retorno Potencial", value=19.0)
-        if st.form_submit_button("Salvar Aposta"):
-            from datetime import date
+    st.title("🦁 Config")
+    with st.form("nova_aposta"):
+        st.subheader("Nova Entrada")
+        f_jogo = st.text_input("Confronto")
+        f_liga = st.text_input("Liga")
+        f_mercado = st.text_input("Mercado")
+        f_entrada = st.number_input("Valor da Aposta", min_value=1.0, value=10.0)
+        f_retorno = st.number_input("Retorno Possível", min_value=1.0, value=19.0)
+        
+        if st.form_submit_button("Lançar Aposta"):
             sheet = conectar_gsheets()
-            odd = retorno / entrada if entrada > 0 else 0
-            sheet.append_row([date.today().strftime("%d/%m/%Y"), liga, jogo, mercado, entrada, retorno, f"{odd:.2f}", "Pendente", 0.0])
-            st.rerun()
+            if sheet:
+                odd = f_retorno / f_entrada if f_entrada > 0 else 0
+                sheet.append_row([date.today().strftime("%d/%m/%Y"), f_liga, f_jogo, f_mercado, f_entrada, f_retorno, f"{odd:.2f}", "Pendente", 0])
+                st.rerun()
